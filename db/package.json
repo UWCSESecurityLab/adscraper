@@ -1,0 +1,23 @@
+{
+  "name": "db",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cli-progress": "^3.8.2",
+    "command-line-args": "^5.1.1",
+    "command-line-usage": "^6.1.0",
+    "pg": "^8.4.1"
+  },
+  "devDependencies": {
+    "@types/cli-progress": "^3.8.0",
+    "@types/command-line-args": "^5.0.0",
+    "@types/command-line-usage": "^5.0.1",
+    "@types/pg": "^7.14.5"
+  }
+}

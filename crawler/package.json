@@ -1,0 +1,44 @@
+{
+  "name": "ads-crawler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "crawl": "node gen/crawler.js localhost 1",
+    "build:docker": "docker build -t puppeteer-chrome-linux .",
+    "run:docker": "docker run -i --init --rm --cap-add=SYS_ADMIN  --net adscraper --name puppeteer-chrome -v /data/screenshots:/data/screenshots puppeteer-chrome-linux",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Eric Zeng",
+  "license": "MIT",
+  "dependencies": {
+    "@types/cli-progress": "^3.7.0",
+    "@types/command-line-args": "^5.0.0",
+    "@types/command-line-usage": "^5.0.1",
+    "@types/pg": "^7.14.4",
+    "@types/public-ip": "^3.1.0",
+    "@types/puppeteer": "^5.4.2",
+    "@types/request": "^2.48.5",
+    "@types/sharp": "^0.25.1",
+    "@types/source-map-support": "^0.5.2",
+    "@types/uuid": "^7.0.4",
+    "@types/xml2js": "^0.4.5",
+    "cli-progress": "^3.8.2",
+    "command-line-args": "^5.1.1",
+    "command-line-usage": "^6.1.0",
+    "csv-parser": "^2.3.3",
+    "pg": "^8.3.0",
+    "public-ip": "^4.0.2",
+    "puppeteer": "^5.5.0",
+    "request": "^2.88.2",
+    "rss-parser": "^3.9.0",
+    "sharp": "^0.25.4",
+    "source-map-support": "^0.5.19",
+    "uuid": "^7.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^14.0.27",
+    "typescript": "^3.9.7"
+  }
+}
