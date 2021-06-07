@@ -1,10 +1,11 @@
 {
-  "name": "crawl-master",
+  "name": "crawl-coordinator",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "crawl": "node gen/crawl-master.js",
+    "build": "tsc",
+    "crawl": "node gen/crawl-coordinator.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Eric Zeng",
