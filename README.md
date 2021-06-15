@@ -191,7 +191,7 @@ mkdir ~/adscraper_logs
 
 Lastly, run this command to start a crawl:
 ```sh
-node gen/crawl-master.js \
+node gen/crawl-coordinator.js \
   --inputs input_sites.csv \
   --job_name my_first_crawl \
   --screenshot_dir ~/adscraper_screenshots/ \

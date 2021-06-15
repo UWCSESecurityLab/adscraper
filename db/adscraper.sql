@@ -65,6 +65,8 @@ CREATE TABLE ad (
   platform TEXT,
   chumbox_id INTEGER REFERENCES chumbox(id),
   with_context BOOLEAN,
+  max_bid_price NUMERIC,
+  winning_bid BOOLEAN,
   bb_x INTEGER,
   bb_y INTEGER,
   bb_height INTEGER,
