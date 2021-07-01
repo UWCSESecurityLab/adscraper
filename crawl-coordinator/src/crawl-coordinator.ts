@@ -10,6 +10,8 @@ import LogMonitor from './LogMonitor';
 import WorkerManager from './WorkerManager';
 import os from 'os';
 import publicIp from 'public-ip';
+import { DOCKER_NETWORK } from './constants';
+import { getContainerIp } from './storage';
 sourcemap.install();
 
 // Default param values
@@ -131,6 +133,19 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'pg'
   },
   {
+    name: 'pg_container',
+    type: String,
+    description: 'The name or ID of the Docker container running the Postgres database, if Postgres is running in a Docker container on the same Docker bridge network.',
+    group: 'pg'
+  },
+  {
+    name: 'pg_container_port',
+    type: Number,
+    description: 'The container-internal port of the Postgres database, if Postgres is running in a Docker container, and the internal port is NOT the same as the external port exposed to the host machine.',
+    defaultValue: 5432,
+    group: 'pg'
+  },
+  {
     name: 'job_id',
     type: Number,
     alias: 'j',
@@ -154,8 +169,7 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'warm',
     type: Boolean,
-    description: `Crawls the input dataset without saving data, to 'warm' the
-      machine's targeting profile if it is being fingerprinted`,
+    description: `Crawls the input dataset without saving data, to 'warm' the machine's targeting profile, ensuring that all sites have been visited once before collecting data.`,
     defaultValue: false,
     group: 'anti_track'
   },
@@ -277,6 +291,10 @@ if (options.vpn === 'docker' && !fs.existsSync(options.wireguard_conf)) {
   console.log(`Couldn't find Wireguard config file at ${options.wireguard_conf}.`);
   process.exit(1);
 }
+if (options.pg_container && options.vpn) {
+  console.log('Error: cannot use VPN with Docker-based Postgres. Only one of --vpn or --pg_container can be used.');
+  process.exit(1);
+}
 
 let pgConf: {
   host: string,
@@ -312,13 +330,25 @@ logFileStream.write('[');
   // machine as the crawler, and it's a dockerized VPN crawl, the crawlers
   // need to connect to the public ip, not localhost.
   let crawler_pg_host = pgConf.host;
-  if (options.vpn === 'docker' && pgConf.host === 'localhost') {
+  let crawler_pg_port = pgConf.port;
+  if (options.vpn === 'docker' && (pgConf.host === 'localhost' || pgConf.host === '127.0.0.1')) {
     let publicIp = await getPublicIp();
     if (!publicIp) {
       console.log('Error: Could not find a public IP for this host. Crawlers will not be able to connect to the postgres database.');
       process.exit(1);
     }
     crawler_pg_host = publicIp;
+  } else if (options.pg_container && (pgConf.host === 'localhost' || pgConf.host === '127.0.0.1')) {
+    const containerIp = await getContainerIp(docker, options.pg_container);
+    if (!containerIp) {
+      console.log(`Error: could not find a running container with the id or name ${options.pg_container} on the Docker network ${DOCKER_NETWORK}`);
+      process.exit(1);
+    }
+    crawler_pg_host = containerIp;
+    console.log(`Postgres Container IP is: ${crawler_pg_host}`);
+  }
+  if (options.pg_container_port && (pgConf.host === 'localhost' || pgConf.host === '127.0.0.1')) {
+    crawler_pg_port = options.pg_container_port;
   }
 
   // Initialize logging stream pipeline
@@ -336,7 +366,7 @@ logFileStream.write('[');
     disableThirdPartyCookies: options.disable_third_party_cookies,
     clearCookiesBeforeCT: options.clear_cookies_before_ct,
     pgHost: crawler_pg_host,
-    pgPort: pgConf.port,
+    pgPort: crawler_pg_port,
     pgUser: pgConf.user,
     pgPassword: pgConf.password,
     pgDatabase: pgConf.database,
@@ -427,12 +457,7 @@ logFileStream.write('[');
   manager.setJobId(jobId);
 
   // Set up network for crawler containers, containerized VPN
-  let dockerNetwork: string | undefined;
-  if (!options.vpn) {
-    dockerNetwork = 'host';
-  } else {
-    dockerNetwork = undefined;
-  }
+  let dockerNetwork = DOCKER_NETWORK;
   if (options.vpn === 'docker') {
     try {
       const containerName = `wireguard-${jobId}`;

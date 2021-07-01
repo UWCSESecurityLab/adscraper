@@ -1,4 +1,4 @@
-import Docker, { Container } from 'dockerode';
+import Docker from 'dockerode';
 import { DB_VOLUME, DOCKER_NETWORK } from './constants';
 
 export async function initVolume(docker: Docker): Promise<Docker.VolumeInspectInfo> {
@@ -64,6 +64,19 @@ export async function initPostgres(docker: Docker) {
     }
     return await container.inspect();
   }
+}
+
+export async function getContainerIp(docker: Docker, nameOrId: string) {
+  const list = await docker.listContainers();
+  const match = list.find((container) => {
+    return (container.Names.includes(`/${nameOrId}`) || container.Id === nameOrId)
+      && container.HostConfig.NetworkMode === DOCKER_NETWORK
+      && container.State == 'running';
+  });
+  if (!match) {
+    return undefined;
+  }
+  return match.NetworkSettings.Networks[DOCKER_NETWORK].IPAddress;
 }
 
 export async function initNetwork(docker: Docker) {
