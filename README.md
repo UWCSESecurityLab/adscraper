@@ -61,31 +61,30 @@ can be helpful for development/writing your own scripts based on adscraper.
 npm install -g typescript
 ```
 
-Next, follow the instructions in [db/README.md](db/README.md) to set up the
-PostgreSQL database used by the crawler.
-
-Then, go to the `crawler` directory, install dependencies, and compile the
-crawler.
-```
-cd crawler
-npm install
-npm run build
-npm run build:docker
-```
-
-Lastly, go to the `crawl-coordinator` directory, install dependencies, and
-compile.
-```
-cd ../crawl-coordinator
-npm install
-npm run build
-```
+Further setup and installation instructions for the basic `crawler` script
+and the parallelized `crawl-coordinator` script are described in the next
+section.
 
 # Usage
 
 ## Running Basic Crawls
 This is a guide for running basic crawls using `crawler`. The crawler script
 scrapes ads from a single website, without the Docker-based profile isolation.
+
+### Setup 
+First, you must have a PostgreSQL database that has the schema defined in
+`db/adscraper.sql`. You can set this up yourself, or follow the instructions
+in [db/README.md](db/README.md).
+
+Then, install dependencies and compile the code in the `crawler` directory.
+```
+cd crawler
+npm install
+npm run build
+```
+
+
+### Commands
 
 The main script for the basic, CLI-based crawler is the Typescript
 file `src/crawler-cli.ts`.
@@ -147,6 +146,38 @@ command, using parallel crawler instances. `crawl-coordinator` also ensures
 that each crawl has a fresh profile, by using a separate Docker container
 for each site in the list.
 
+### Setup
+
+First, to run crawl-coordinator, you must run a Postgres database in a Docker
+container, connected to a Docker bridge network called `adscraper`. 
+For instructions, please read the section titled "Setup (for Docker-based 
+crawls)" in [db/README.md](db/README.md).
+
+Next, install dependencies and compile the code in both 
+`crawl-coordinator` and `crawler`.
+
+```
+cd crawler
+# Install crawler deps
+npm install
+# Build Docker image for crawler
+npm run build:docker
+
+cd ../crawl-coordinator
+# Install crawl-coordinator deps
+npm install
+# Compile crawl-coordinator
+npm run build
+```
+
+**Note for Windows users:** Ensure that `crawler/start.sh` has Unix-style LF 
+line endings, and not Windows-style CRLF line endings, before building
+the crawler image (`npm run build:docker`). If your Git is configured to 
+check out files with CRLF endings, you may have to do this manually. I use 
+Notepad++ -> Edit -> EOL Conversion -> LF.
+
+
+### Commands
 The main script for the basic, CLI-based crawler is the Typescript
 file `src/crawl-coordinator.ts`.
 To compile the script run the following command:
@@ -154,25 +185,33 @@ To compile the script run the following command:
 npm run build  # or npx tsc, or tsc if you have Typescript installed globally
 ```
 
-The compiled script is now at `src/crawler-coordinator.js`. To run the script, run:
+The compiled script is now at `src/crawl-coordinator.js`. To run the script, run:
 ```
-node gen/crawler-cli.js
+node gen/crawl-ccoordinator.js
 ```
 This will show the command line options.
 
 ### Example
 
-First, create a CSV file containing the sites you want the crawlers to visit,
-named `input_sites.csv`.
-```csv
-url,label
-nytimes.com,news
-arstechnica.com,news
-sourceforge.com,software
-speedtest.net,software
+First, we create a Postgres database in Docker, per instructions in 
+[db/README.md](db/README.md), if you have not already.
+```sh
+docker pull postgres:13
+docker network create adscraper
+docker volume create adscraper_data
+docker run \
+  --name adscraper-postgres \
+  --mount source=adscraper_data,target=/var/lib/postgresql/data \
+  --net adscraper \
+  -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=adscraper \
+  -e POSTGRES_PASSWORD=example_password_12345 \
+  -d \
+  postgres:13
+psql -d adscraper -U adscraper -h localhost -p 5432 -f ../db/adscraper.sql
 ```
 
-Second, create a postgres credentials file, named `pg_conf.json`:
+Next, create a postgres credentials file, named `pg_conf.json`:
 ```json
 {
   "host": "localhost",
@@ -183,6 +222,16 @@ Second, create a postgres credentials file, named `pg_conf.json`:
 }
 ```
 
+Then, create a CSV file containing the sites you want the crawlers to visit,
+named `input_sites.csv`.
+```csv
+url,label
+nytimes.com,news
+arstechnica.com,news
+sourceforge.com,software
+speedtest.net,software
+```
+
 Create a directory for storing screenshots and logs:
 ```
 mkdir ~/adscraper_screenshots
@@ -191,15 +240,17 @@ mkdir ~/adscraper_logs
 
 Lastly, run this command to start a crawl:
 ```sh
-node gen/crawl-coordinator.js \
-  --inputs input_sites.csv \
-  --job_name my_first_crawl \
-  --screenshot_dir ~/adscraper_screenshots/ \
-   --log_dir ~/adscraper_logs \
-   --pg_conf_file ./pg_conf.json \
-   --num_workers 4 \
-   --crawl_article \
-   --screenshot_ads_with_context \
+node gen/crawl-coordinator.js `
+  --inputs input_sites.csv `
+  --job_name my_first_crawl `
+  --screenshot_dir ../adscraper_screenshots/ `
+   --log_dir ../adscraper_logs `
+   --pg_conf_file ../pg_conf.json `
+   --num_workers 4 `
+   --crawl_article `
+   --screenshot_ads_with_context `
+   --pg_container adscraper-postgres `
+   --pg_container_port 5432 `
    --shuffle
 ```
 

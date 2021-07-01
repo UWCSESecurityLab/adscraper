@@ -26,8 +26,8 @@ psql -d adscraper -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
 ## Setup (for Docker-based crawls)
-To make networking with Docker-based crawlers easier, the recommended way to set
-up the database is to put the database in a Docker container.
+To run `crawl-coordinator`, you must set up your Postgres database in Docker,
+so that the Docker-based crawl workers can connect to the database.
 
 First, make sure you have Docker installed, and then pull the postgres image.
 ```sh
@@ -43,27 +43,41 @@ POSTGRES_USER=adscraper
 These will be the credentials for your Docker postgres instance. Do not
 check this file into Git!
 
-Next, run the following command to start a new postgres container.
-This container persists the data to a Docker volume called "scraper_data",
-creates a user with the credentials provided at `postgres_env`,
-exposes the database at localhost:5432.
+Next, create a Docker bridge network named `adscraper`. This will allow the
+crawl workers, which will also run in Docker containers, to connect to the 
+Postgres container.
+```
+docker network create adscraper
+```
+
+Next, create a Docker volume, where the Postgres data will be stored. The data
+will be persisted here outside of containers, so you can create, stop, restart,
+delete, and recreate your Postgres container, without losing data, as long 
+as you mount to this volume.
+```
+docker volume create adscraper_data
+```
+
+Next, run the following command to start a new container running Postgres,
+named `adscraper-postgres`, creates a user with the credentials provided in the
+`postgres_env` file, connects it to the `adscraper` Docker network, and
+exposes the database at localhost:5432 (you can access it with the psql tool at
+that host/port). 
 ```
 docker run \
-  --name postgres \
-  --mount source=scraper_data,target=/var/lib/postgresql/data \
+  --name adscraper-postgres \
+  --mount source=adscraper_data,target=/var/lib/postgresql/data \
   --env-file ./postgres_env \
+  --net adscraper \
   -p 127.0.0.1:5432:5432 \
   -d \
   postgres:13
 ```
 
-Then, using the same command as above, create the database and tables:
+Lastly, create the database and tables:
 ```
 psql -d adscraper -U <YOUR_POSTGRES_USERNAME> -h localhost -p 5432 -f ./adscraper.sql
 ```
-
-The container can be stopped, removed, and restarted safely without losing data,
-using the same command.
 
 ### Setup (for VPN/Distributed Crawls)
 When crawling in a VPN, or doing distributed crawling, the crawler may need
