@@ -317,7 +317,12 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 }
 
 // Initialize logging
-const logPath = path.resolve(options.log_dir, `crawl_${new Date().toISOString()}.json`);
+let dateStr = new Date().toISOString();
+if (os.platform() == 'win32') {
+  dateStr = dateStr.replace(/:/g, '');
+}
+const logPath = path.resolve(options.log_dir, `crawl_${dateStr}.json`);
+console.log(logPath);
 const logFileStream = fs.createWriteStream(logPath);
 logFileStream.write('[');
 
