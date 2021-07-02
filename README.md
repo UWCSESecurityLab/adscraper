@@ -211,7 +211,7 @@ docker run \
 psql -d adscraper -U adscraper -h localhost -p 5432 -f ../db/adscraper.sql
 ```
 
-Next, create a postgres credentials file, named `pg_conf.json`:
+Next, create a postgres credentials file, named `pg_conf.json`, (anywhere is fine, but in the main repo folder in this example):
 ```json
 {
   "host": "localhost",
@@ -223,7 +223,7 @@ Next, create a postgres credentials file, named `pg_conf.json`:
 ```
 
 Then, create a CSV file containing the sites you want the crawlers to visit,
-named `input_sites.csv`.
+named `input_sites.csv` (anywhere is fine, but in the main repo folder in this example).
 ```csv
 url,label
 nytimes.com,news
@@ -243,8 +243,8 @@ Lastly, run this command to start a crawl:
 node gen/crawl-coordinator.js \
   --inputs input_sites.csv \
   --job_name my_first_crawl \
-  --screenshot_dir ../adscraper_screenshots/ \
-   --log_dir ../adscraper_logs \
+  --screenshot_dir ~/adscraper_screenshots/ \
+   --log_dir ~/adscraper_logs \
    --pg_conf_file ../pg_conf.json \
    --num_workers 4 \
    --crawl_article \
@@ -266,7 +266,7 @@ it is currently quite janky.)
 
 ```
 node gen/crawl-coordinator.js -i
-  --inputs input_sites.csv \
+  --inputs ../input_sites.csv \
   --job_name my_first_crawl \
   --screenshot_dir ~/adscraper_screenshots/ \
   --log_dir ~/adscraper_logs \
