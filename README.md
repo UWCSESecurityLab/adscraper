@@ -240,17 +240,17 @@ mkdir ~/adscraper_logs
 
 Lastly, run this command to start a crawl:
 ```sh
-node gen/crawl-coordinator.js `
-  --inputs input_sites.csv `
-  --job_name my_first_crawl `
-  --screenshot_dir ../adscraper_screenshots/ `
-   --log_dir ../adscraper_logs `
-   --pg_conf_file ../pg_conf.json `
-   --num_workers 4 `
-   --crawl_article `
-   --screenshot_ads_with_context `
-   --pg_container adscraper-postgres `
-   --pg_container_port 5432 `
+node gen/crawl-coordinator.js \
+  --inputs input_sites.csv \
+  --job_name my_first_crawl \
+  --screenshot_dir ../adscraper_screenshots/ \
+   --log_dir ../adscraper_logs \
+   --pg_conf_file ../pg_conf.json \
+   --num_workers 4 \
+   --crawl_article \
+   --screenshot_ads_with_context \
+   --pg_container adscraper-postgres \
+   --pg_container_port 5432 \
    --shuffle
 ```
 
