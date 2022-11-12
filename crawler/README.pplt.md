@@ -39,8 +39,25 @@ vehicles
 npm install
 ```
 
+# Run postgres
+We need a Postgres database running locally - `localhost`, on port `5432`.
+The `docker-compose.yml` contains the Docker configuration.
+
+If you already have Docker/Colima installed on your mac, you can just run - 
+
+```shell
+docker-compose up
+```
+
+to bring up the database.
+
+# TODO: If not using Docker... 
+
+
 ## Running the app
 
 ```shell
 npm run ads
 ```
+
+This will run the file `crawler/src/pplt_crawler.ts` which has the sites hard-coded for now.
