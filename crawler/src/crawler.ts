@@ -1,19 +1,21 @@
 import fs from 'fs';
 import { Client } from 'pg';
-import puppeteer from 'puppeteer';
+import puppeteer from "puppeteer";
+import {addExtra} from 'puppeteer-extra'
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
-import * as adDetection from './ad-detection';
-import * as adScraper from './ad-scraper';
-import { splitChumbox } from './chumbox-scraper';
-import DbClient from './db';
-import { extractExternalDomains } from './domain-extractor';
-import { findArticle, findPageWithAds } from './find-page';
-import * as iframeScraper from './iframe-scraper';
-import * as log from './log';
-import * as pageScraper from './page-scraper';
-import { PageType } from './page-scraper';
-import * as trackingEvasion from './tracking-evasion';
-import * as domMonitor from './dom-monitor';
+import * as adDetection from './ad-detection.js';
+import * as adScraper from './ad-scraper.js';
+import { splitChumbox } from './chumbox-scraper.js';
+import DbClient from './db.js';
+import { extractExternalDomains } from './domain-extractor.js';
+import { findArticle, findPageWithAds } from './find-page.js';
+import * as iframeScraper from './iframe-scraper.js';
+import * as log from './log.js';
+import * as pageScraper from './page-scraper.js';
+import { PageType } from './page-scraper.js';
+import * as trackingEvasion from './tracking-evasion.js';
+import * as domMonitor from './dom-monitor.js';
 import publicIp from 'public-ip';
 
 sourceMapSupport.install();
@@ -442,10 +444,12 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
 
   // Open browser
   log.info('Launching browser...');
-  browser = await puppeteer.launch({
+  const extraPuppeteer = addExtra(puppeteer);
+  extraPuppeteer.use(StealthPlugin());
+  browser = await extraPuppeteer.launch({
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
-    headless: true
+    headless: true,
   });
   const version = await browser.version();
 

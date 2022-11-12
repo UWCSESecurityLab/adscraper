@@ -1,4 +1,4 @@
-import * as log from './log';
+import * as log from './log.js';
 import puppeteer from 'puppeteer';
 
 

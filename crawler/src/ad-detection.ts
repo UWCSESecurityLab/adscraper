@@ -1,5 +1,7 @@
 import puppeteer from 'puppeteer';
-import easylist from './easylist_selectors.json';
+import fs from "fs";
+
+const easylist = JSON.parse(fs.readFileSync('src/easylist_selectors.json','utf8'));
 
 const combinedSelectors = easylist.concat([
   '.ob-widget',

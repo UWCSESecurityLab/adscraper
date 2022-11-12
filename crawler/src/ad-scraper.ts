@@ -2,7 +2,7 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
-import * as log from './log';
+import * as log from './log.js';
 
 export interface AdHandles {
   clickTarget: puppeteer.ElementHandle,

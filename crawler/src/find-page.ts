@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
-import * as log from './log';
-import getArticleFromRSS from './get-rss-article';
-import * as adDetection from './ad-detection';
+import * as log from './log.js';
+import getArticleFromRSS from './get-rss-article.js';
+import * as adDetection from './ad-detection.js';
 import fs from 'fs';
 
 /**

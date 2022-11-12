@@ -1,6 +1,6 @@
 import puppeteer from 'puppeteer';
 import rssParser from 'rss-parser';
-import * as log from './log';
+import * as log from './log.js';
 
 /**
  * Attempts to find an article page from a website by finding an RSS feed.

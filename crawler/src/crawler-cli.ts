@@ -2,11 +2,9 @@ import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 import fs from 'fs';
 import { Client } from 'pg';
-import sourceMapSupport from 'source-map-support';
 import os from 'os';
-import * as crawler from './crawler';
-import * as log from './log';
-sourceMapSupport.install();
+import * as crawler from './crawler.js';
+import * as log from './log.js';
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
