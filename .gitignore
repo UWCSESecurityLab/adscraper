@@ -3,3 +3,9 @@ gen
 .DS_Store
 db/postgres_env
 crawler/adscraper_screenshots
+.env
+**/*.map
+**/*.js
+tsconfig.tsbuildinfo
+*.png
+.idea

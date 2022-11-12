@@ -32,6 +32,7 @@ async function splitTopContextAd(
   }
 
   let fullAd = await Promise.all(link.map(async (l) => {
+    //@ts-ignore
     let ec = await container.executionContext();
     if (ec) {
       let parentHandle = await ec.evaluateHandle((e: Element, depth: number) => {

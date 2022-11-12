@@ -1,6 +1,12 @@
 import * as crawler from './crawler.js';
 import pkg from 'pg';
+import dotenv from "dotenv";
+import {getProfile} from "./init-creds.js";
 const { Client } = pkg;
+
+dotenv.config()
+
+const thisProfile = await getProfile();
 
 let postgres = new Client({
     "host": "localhost",
@@ -37,7 +43,7 @@ for (let site of sites) {
             url: site,
             warmingCrawl: false,
             updateCrawlerIpField: false
-        }, postgres);
+        }, postgres, thisProfile);
 
     } catch (e) {
         console.log(e);

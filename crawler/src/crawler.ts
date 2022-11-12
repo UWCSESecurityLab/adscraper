@@ -17,6 +17,8 @@ import { PageType } from './page-scraper.js';
 import * as trackingEvasion from './tracking-evasion.js';
 import * as domMonitor from './dom-monitor.js';
 import publicIp from 'public-ip';
+import {Entry} from "buttercup";
+import {login} from "./google_login.js";
 
 sourceMapSupport.install();
 
@@ -73,7 +75,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
 }
 
 function createAsyncTimeout<T>(message: string, ms: number): [Promise<T>, NodeJS.Timeout] {
-  let timeoutId: NodeJS.Timeout;
+  let timeoutId: number;
   const timeout = new Promise<void>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${message} - ${ms}ms`));
@@ -197,6 +199,7 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
             flags.screenshotDir,
             flags.externalScreenshotDir,
             flags.crawlerHostname);
+        //@ts-ignore
         pageId = await db.archivePage({
           crawl_id: metadata.crawlId,
           job_id: flags.jobId,
@@ -428,7 +431,7 @@ function clickAd(
   });
 }
 
-export async function crawl(flags: CrawlerFlags, postgres: Client) {
+export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entry) {
   if (!fs.existsSync(flags.screenshotDir)) {
     console.log(`${flags.screenshotDir} is not a valid directory`);
     process.exit(1);
@@ -446,11 +449,17 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
   log.info('Launching browser...');
   const extraPuppeteer = addExtra(puppeteer);
   extraPuppeteer.use(StealthPlugin());
-  browser = await extraPuppeteer.launch({
+  const launchOptions = {
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
-    headless: true,
-  });
+    headless: false,
+  };
+  //@ts-ignore
+  browser = await extraPuppeteer.launch(launchOptions);
+
+  // Login into google
+  await login(browser, profile);
+
   const version = await browser.version();
 
   log.info('Running ' + version);

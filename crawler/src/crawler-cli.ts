@@ -252,7 +252,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       url: options.url as string,
       warmingCrawl: options.warming_crawl ? true : false,
       updateCrawlerIpField: options.update_crawler_ip_field as boolean
-    }, postgres);
+    }, postgres, null);
     await postgres.end();
     process.exit(0);
   } catch (e) {
