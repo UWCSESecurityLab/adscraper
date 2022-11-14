@@ -19,6 +19,8 @@ import * as domMonitor from './dom-monitor.js';
 import publicIp from 'public-ip';
 import {Entry} from "buttercup";
 import {login} from "./google_login.js";
+import Timeout = NodeJS.Timeout;
+import {scrollRandomly} from "./util.js";
 
 sourceMapSupport.install();
 
@@ -75,7 +77,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
 }
 
 function createAsyncTimeout<T>(message: string, ms: number): [Promise<T>, NodeJS.Timeout] {
-  let timeoutId: number;
+  let timeoutId: Timeout;
   const timeout = new Promise<void>((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`${message} - ${ms}ms`));
@@ -190,7 +192,7 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
   let [timeout, timeoutId] = createAsyncTimeout<void>(
     `${page.url()}: Timed out crawling page`, PAGE_CRAWL_TIMEOUT);
 
-  const _crawlPage = (async () => {
+  const _crawlPage = await (async () => {
     try {
       let pageId = -1;
       if (!flags.warmingCrawl) {
@@ -217,6 +219,11 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
         return;
       }
 
+      console.log("Beginning scroll");
+      for (let counter: number = 0; counter < 60; counter++) {
+        await scrollRandomly(page);
+      }
+
       const ads = await adDetection.identifyAdsInDOM(page);
       log.info(`${page.url()}: ${ads.size} ads identified`);
 
@@ -227,25 +234,25 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
         let platform: string | undefined = undefined;
         let chumboxId: number | undefined = undefined;
         let chumboxes = Object.entries(await splitChumbox(ad))
-          .filter(([, handles]) => handles !== null);
+            .filter(([, handles]) => handles !== null);
         if (chumboxes.length === 1 && chumboxes[0][1] !== null) {
           platform = chumboxes[0][0];
           adHandles = chumboxes[0][1];
           chumboxId = await db.insert({
             table: 'chumbox',
             returning: 'id',
-            data: { platform: platform, parent_page: pageId }
+            data: {platform: platform, parent_page: pageId}
           });
         } else {
-          adHandles = [{ clickTarget: ad, screenshotTarget: ad }];
+          adHandles = [{clickTarget: ad, screenshotTarget: ad}];
         }
         // Crawl and click on the ad(s)
         for (let adHandle of adHandles) {
           try {
             let adId = -1;
             const crawlTarget = adHandle.screenshotTarget
-              ? adHandle.screenshotTarget
-              : adHandle.clickTarget;
+                ? adHandle.screenshotTarget
+                : adHandle.clickTarget;
             adId = await crawlAd(crawlTarget, page, {
               parentPageId: pageId,
               parentDepth: metadata.currentDepth,
@@ -264,7 +271,7 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
               log.warning(`Aborting click on ad ${adId}: no bounding box`);
               continue;
             }
-            if (bounds.height < 10 || bounds.width < 10 ) {
+            if (bounds.height < 10 || bounds.width < 10) {
               log.warning(`Aborting click on ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
               continue;
             }

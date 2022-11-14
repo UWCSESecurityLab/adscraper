@@ -34,7 +34,7 @@ for (let site of sites) {
             dataset: 'test',
             disableAllCookies: false,
             disableThirdPartyCookies: false,
-            jobId: 1,
+            jobId: 2,
             label: 'news',
             maxPageCrawlDepth: 2,
             screenshotAdsWithContext: true,
