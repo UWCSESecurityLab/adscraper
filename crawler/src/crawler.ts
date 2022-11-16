@@ -463,8 +463,10 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
     defaultViewport: VIEWPORT,
     headless: false,
   };
-  if (env['CHROME_PATH']) {
-    launchOptions['executablePath'] = env['CHROME_PATH']
+  const chromePath = env['CHROME_PATH'];
+  if (chromePath) {
+    console.log("Using Google Chrome from ", chromePath);
+    launchOptions['executablePath'] = chromePath as string;
   }
   //@ts-ignore
   browser = await extraPuppeteer.launch(launchOptions);
