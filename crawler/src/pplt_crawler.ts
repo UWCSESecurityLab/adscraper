@@ -3,18 +3,21 @@ import pkg from 'pg';
 import dotenv from "dotenv";
 import {getProfile} from "./init-creds.js";
 const { Client } = pkg;
+import {env} from "process";
 
 dotenv.config()
 
 const thisProfile = await getProfile();
 
-let postgres = new Client({
-    "host": "localhost",
-    "port": 5432,
-    "database": "adscraper",
-    "user": "adscraper",
-    "password": "adscraper"
-});
+const pgConf = {
+    host: env["POSTGRES_HOST"],
+    port: 5432,
+    user: 'adscraper',
+    password: 'adscraper',
+    database: 'adscraper'
+};
+
+let postgres = new Client(pgConf);
 await postgres.connect();
 
 const sites = [
