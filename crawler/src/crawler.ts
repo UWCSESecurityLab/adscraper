@@ -459,7 +459,7 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   const extraPuppeteer = addExtra(puppeteer);
   extraPuppeteer.use(StealthPlugin());
   const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=user-data/${env['PROFILE']}`, '--use-gl=egl'],
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=user-data/${env['PROFILE']}`],
     defaultViewport: VIEWPORT,
     headless: true,
   };
