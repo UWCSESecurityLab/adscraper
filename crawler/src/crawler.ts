@@ -268,14 +268,15 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
             }
             const bounds = await adHandle.clickTarget.boundingBox();
             if (!bounds) {
-              log.warning(`Aborting click on ad ${adId}: no bounding box`);
+              log.warning(`Ad ${adId}: no bounding box`);
               continue;
             }
             if (bounds.height < 10 || bounds.width < 10) {
-              log.warning(`Aborting click on ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
+              log.warning(`Ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
               continue;
             }
-            await clickAd(adHandle.clickTarget, page, metadata.currentDepth, metadata.crawlId, pageId, adId);
+            // TODO: Do not click on ad - otherwise our profile will be affected
+            // await clickAd(adHandle.clickTarget, page, metadata.currentDepth, metadata.crawlId, pageId, adId);
           } catch (e) {
             log.error(e);
           }
