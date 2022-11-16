@@ -21,6 +21,7 @@ import {Entry} from "buttercup";
 import {login} from "./google_login.js";
 import Timeout = NodeJS.Timeout;
 import {scrollRandomly} from "./util.js";
+import {env} from "process";
 
 sourceMapSupport.install();
 
@@ -458,10 +459,13 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   const extraPuppeteer = addExtra(puppeteer);
   extraPuppeteer.use(StealthPlugin());
   const launchOptions = {
-    args: ['--disable-dev-shm-usage'],
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=user-data/${env['PROFILE']}`],
     defaultViewport: VIEWPORT,
     headless: false,
   };
+  if (env['CHROME_PATH']) {
+    launchOptions['executablePath'] = env['CHROME_PATH']
+  }
   //@ts-ignore
   browser = await extraPuppeteer.launch(launchOptions);
 
