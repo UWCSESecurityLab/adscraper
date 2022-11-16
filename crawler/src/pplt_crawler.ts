@@ -3,11 +3,18 @@ import pkg from 'pg';
 import dotenv from "dotenv";
 import {getProfile} from "./init-creds.js";
 const { Client } = pkg;
-import {env} from "process";
+import {env, exit} from "process";
 
 dotenv.config()
 
-const thisProfile = await getProfile();
+const profile = env['PROFILE']
+
+if (profile === undefined) {
+    console.log("Profile is undefined!")
+    exit(0)
+}
+
+const thisProfile = await getProfile(profile);
 
 const pgConf = {
     host: env["POSTGRES_HOST"],
@@ -75,7 +82,7 @@ for (let site of sites) {
             disableAllCookies: false,
             disableThirdPartyCookies: false,
             jobId: jobId,
-            label: 'news',
+            label: profile,
             maxPageCrawlDepth: options.max_page_crawl_depth,
             screenshotAdsWithContext: true,
             screenshotDir: './adscraper_screenshots',

@@ -3,7 +3,7 @@ import pkg from 'buttercup';
 
 const { Credentials, FileDatasource, Vault, init } = pkg;
 
-export const getProfile = async () => {
+export const getProfile = async (profile: string) => {
     init()
     const datasourceCredentials = Credentials.fromDatasource({
         path: "./user.bcup",
@@ -18,13 +18,6 @@ export const getProfile = async () => {
     const vault = Vault.createFromHistory(loadedState.history, loadedState.Format);
 
     vault.getAllGroups()
-
-    const profile = env['PROFILE']
-
-    if (profile === undefined) {
-        console.log("Profile is undefined!")
-        exit(0)
-    }
 
     const entries = vault.findEntriesByProperty('title', profile)
     return entries[0]!;
