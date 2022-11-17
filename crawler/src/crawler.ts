@@ -458,8 +458,10 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   log.info('Launching browser...');
   const extraPuppeteer = addExtra(puppeteer);
   extraPuppeteer.use(StealthPlugin());
+  const profileStr = env['PROFILE'];
+  const profileDirectory = env['PROFILE_DIR'] ? `${env['PROFILE_DIR']}/${profileStr}` : `user-data/${profileStr}`;
   const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=user-data/${env['PROFILE']}`],
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
     defaultViewport: VIEWPORT,
     headless: true,
   };
