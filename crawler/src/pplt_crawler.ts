@@ -28,14 +28,31 @@ let postgres = new Client(pgConf);
 await postgres.connect();
 
 const sites = [
-    'https://www.huffpost.com/',
-    'https://techcrunch.com/',
-    'https://www.nytimes.com',
+    'https://www.msn.com/',
+    'https://www.yahoo.com/',
+    'https://www.cnn.com/',
+    'https://www.theguardian.com/',
+    'https://www.huffingtonpost.com/',
     'https://www.foxnews.com/',
-    'https://www.washingtonpost.com',
-    'https://yahoo.com',
-    'https://www.usatoday.com',
-    'https://www.cbsnews.com/'
+    'https://www.wsj.com/',
+    'https://www.time.com/',
+    'https://www.bloomberg.com/',
+    'https://www.news.yahoo.com/',
+    'https://www.washingtonpost.com/',
+    'https://www.kompas.com/',
+    'https://www.nypost.com/',
+    'https://www.gizmodo.com/',
+    'https://www.people.com/',
+    'https://www.rt.com/',
+    'https://www.politico.com/',
+    'https://www.usatoday.com/',
+    'https://www.forbes.com/',
+    'https://www.buzzfeed.com/',
+    'https://www.reuters.com/',
+    'https://www.chicagotribune.com/',
+    'https://www.businessinsider.com/',
+    'https://www.techcrunch.com/',
+    'https://www.nydailynews.com/'
 ];
 
 // create a new job
