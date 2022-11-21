@@ -102,7 +102,7 @@ for (let site of sites) {
             label: profile,
             maxPageCrawlDepth: options.max_page_crawl_depth,
             screenshotAdsWithContext: true,
-            screenshotDir: './adscraper_screenshots',
+            screenshotDir: `${env['SCREENSHOTS_DIR']}/${profile}`,
             skipCrawlingSeedUrl: false,
             url: site,
             warmingCrawl: options.warm,
