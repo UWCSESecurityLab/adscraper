@@ -25,17 +25,21 @@ export const scrollRandomly = async (page: Page) => {
     // be called at regular intervals to surface content on
     // pages
 
-    // set a screen position to scroll from
-    const xloc = randrange(50, 100);
-    const yloc = randrange(50, 100);
-    // CNN is about 10000 pixels long
-    // 10000 pixels in 60 seconds, expected value
-    // 167 pixels per second?
-    const ydelta = randrange(133, 200);
-    // puppeteer provides current mouse position to wheel mouse event
-    await page.mouse.move(xloc, yloc);
-    await page.mouse.wheel({ deltaY: ydelta });
-    await delay(500);
+    try {
+        // set a screen position to scroll from
+        const xloc = randrange(50, 100);
+        const yloc = randrange(50, 100);
+        // CNN is about 10000 pixels long
+        // 10000 pixels in 60 seconds, expected value
+        // 167 pixels per second?
+        const ydelta = randrange(133, 200);
+        // puppeteer provides current mouse position to wheel mouse event
+        await page.mouse.move(xloc, yloc);
+        await page.mouse.wheel({ deltaY: ydelta });
+        await delay(500);
+    } catch (e) {
+        console.log(e);
+    }
 }
 
 function randrange(low: number, high: number): number {
