@@ -22,6 +22,8 @@ import {login} from "./google_login.js";
 import Timeout = NodeJS.Timeout;
 import {scrollRandomly} from "./util.js";
 import {env} from "process";
+import path from "path";
+import rimraf from 'rimraf';
 
 sourceMapSupport.install();
 
@@ -457,11 +459,25 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   // Open browser
   log.info('Launching browser...');
   const extraPuppeteer = addExtra(puppeteer);
-  extraPuppeteer.use(StealthPlugin());
+  const stealthPlugin = StealthPlugin();
+  stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
+  stealthPlugin.enabledEvasions.delete('navigator.plugins');
+  extraPuppeteer.use(stealthPlugin);
   const profileStr = env['PROFILE'];
+
+  // Cleanup cache in profile data
+  const profileDataPath = path.join('.', 'user-data', profileStr)
+  rimraf.sync(path.join(profileDataPath, 'DevToolsActivePort'));
+  rimraf.sync(path.join(profileDataPath, 'Default', 'Cache'));
+  rimraf.sync(path.join(profileDataPath, 'Default', 'Code Cache'));
+  rimraf.sync(path.join(profileDataPath, 'Default', 'DawnCache'));
+
   const profileDirectory = env['PROFILE_DIR'] ? `${env['PROFILE_DIR']}/${profileStr}` : `user-data/${profileStr}`;
+
   const launchOptions = {
     args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
+    devtools: false,
+    slowMo: 10, // slow down by 10ms
     defaultViewport: VIEWPORT,
     headless: true,
   };

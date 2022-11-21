@@ -8,12 +8,31 @@ export const login = async (browser: Browser, profile: Entry) => {
 
     const page = await browser.newPage();
     page.setDefaultNavigationTimeout(0);
+    await page.setBypassCSP(true);
 
     await page.setExtraHTTPHeaders({
         'accept-language': 'en-US,en;q=0.9,hy;q=0.8'
     });
 
-    await page.goto('https://accounts.google.com/v3/signin/identifier?dsh=S-889076191%3A1667933776610676&continue=https%3A%2F%2Fmail.google.com%2Fmail%2F&rip=1&sacu=1&service=mail&flowName=GlifWebSignIn&flowEntry=ServiceLogin&ifkv=ARgdvAuSj61Lh246-HEq3m7Em3UaLHiy6tAhNcd97cPmo0fl1cb5EDzhcabE4EARC9nhtfOxMzHkvg');
+    // First logout
+    await page.goto('https://accounts.google.com/Logout?service=mail&amp;continue=https://mail.google.com/mail/', { waitUntil: 'networkidle2' })
+
+    await page.goto('https://accounts.google.com/Login?service=mail&amp;continue=https://mail.google.com/mail/',
+        { waitUntil: 'networkidle2' });
+
+    const currentUrl = page.url();
+    if(currentUrl.indexOf('signinchooser') !== -1) {
+        const selectAnotherAccount = await page.$x('//div[text()="Use another account"]');
+        if (selectAnotherAccount && selectAnotherAccount.length > 0) {
+            // @ts-ignore
+            await selectAnotherAccount[0].click()
+        }
+    }
+
+    if (currentUrl.indexOf('https://mail.google.com/') != -1) {
+        console.log("Already logged in!");
+        return;
+    }
 
     await page.waitForSelector('input[type="email"]')
     await page.type('input[type="email"]', USERNAME);
