@@ -465,14 +465,13 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   extraPuppeteer.use(stealthPlugin);
   const profileStr = env['PROFILE'];
 
-  // Cleanup cache in profile data
-  const profileDataPath = path.join('.', 'user-data', profileStr)
-  rimraf.sync(path.join(profileDataPath, 'DevToolsActivePort'));
-  rimraf.sync(path.join(profileDataPath, 'Default', 'Cache'));
-  rimraf.sync(path.join(profileDataPath, 'Default', 'Code Cache'));
-  rimraf.sync(path.join(profileDataPath, 'Default', 'DawnCache'));
-
   const profileDirectory = env['PROFILE_DIR'] ? `${env['PROFILE_DIR']}/${profileStr}` : `user-data/${profileStr}`;
+
+  // Cleanup cache in profile data
+  rimraf.sync(path.join(profileDirectory, 'DevToolsActivePort'));
+  rimraf.sync(path.join(profileDirectory, 'Default', 'Cache'));
+  rimraf.sync(path.join(profileDirectory, 'Default', 'Code Cache'));
+  rimraf.sync(path.join(profileDirectory, 'Default', 'DawnCache'));
 
   const launchOptions = {
     args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
