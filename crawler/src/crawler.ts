@@ -580,7 +580,6 @@ export async function crawl(profileDirectory: string, extraPuppeteer: PuppeteerE
   } catch (e) {
     log.error(e);
     await browser.close();
-    throw e;
   }
 }
 
