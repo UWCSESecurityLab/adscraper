@@ -4,6 +4,13 @@ import dotenv from "dotenv";
 import {getProfile} from "./init-creds.js";
 const { Client } = pkg;
 import {env, exit} from "process";
+import _ from "lodash";
+import * as log from "./log";
+import {addExtra} from "puppeteer-extra";
+import puppeteer from "puppeteer";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import rimraf from "rimraf";
+import path from "path";
 
 dotenv.config()
 
@@ -88,9 +95,40 @@ const queryResult = await postgres.query(
     ]);
 const jobId = queryResult.rows[0].id as number;
 
-for (let site of sites) {
+// Open browser
+log.info('Launching browser...');
+const extraPuppeteer = addExtra(puppeteer);
+const stealthPlugin = StealthPlugin();
+stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
+stealthPlugin.enabledEvasions.delete('navigator.plugins');
+extraPuppeteer.use(stealthPlugin);
+const profileStr = env['PROFILE'];
+
+const profileDirectory = env['PROFILE_DIR'] ? `${env['PROFILE_DIR']}/${profileStr}` : `user-data/${profileStr}`;
+
+// Cleanup cache in profile data
+rimraf.sync(path.join(profileDirectory, 'DevToolsActivePort'));
+rimraf.sync(path.join(profileDirectory, 'Default', 'Cache'));
+rimraf.sync(path.join(profileDirectory, 'Default', 'Code Cache'));
+rimraf.sync(path.join(profileDirectory, 'Default', 'DawnCache'));
+
+const VIEWPORT = { width: 1366, height: 768 };
+const launchOptions = {
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
+    devtools: false,
+    slowMo: 10, // slow down by 10ms
+    defaultViewport: VIEWPORT,
+    headless: true,
+};
+const chromePath = env['CHROME_PATH'];
+if (chromePath) {
+    console.log("Using Google Chrome from ", chromePath);
+    launchOptions['executablePath'] = chromePath as string;
+}
+
+for (let site of _.shuffle(sites)) {
     try {
-        await crawler.crawl({
+        await crawler.crawl(extraPuppeteer,{
             clearCookiesBeforeCT: false,
             crawlArticle: true,
             crawlerHostname: options.crawler_hostname,
