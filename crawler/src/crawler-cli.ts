@@ -5,6 +5,9 @@ import { Client } from 'pg';
 import os from 'os';
 import * as crawler from './crawler.js';
 import * as log from './log.js';
+import {addExtra} from "puppeteer-extra";
+import puppeteer from "puppeteer";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
@@ -233,8 +236,14 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
   await postgres.connect();
   log.info('Postgres driver initialized');
 
+  const extraPuppeteer = addExtra(puppeteer);
+  const stealthPlugin = StealthPlugin();
+  stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
+  stealthPlugin.enabledEvasions.delete('navigator.plugins');
+  extraPuppeteer.use(stealthPlugin);
+
   try {
-    await crawler.crawl({
+    await crawler.crawl(extraPuppeteer,{
       clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
       crawlArticle: options.crawl_article ? true : false,
       crawlerHostname: options.crawler_hostname,
