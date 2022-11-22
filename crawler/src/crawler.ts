@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { Client } from 'pg';
 import puppeteer from "puppeteer";
-import {addExtra} from 'puppeteer-extra'
+import {addExtra, PuppeteerExtra} from 'puppeteer-extra'
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
 import * as adDetection from './ad-detection.js';
@@ -55,7 +55,6 @@ let PAGE_CRAWL_TIMEOUT: number;
 let AD_CRAWL_TIMEOUT: number;
 let AD_SLEEP_TIME: number;
 let PAGE_SLEEP_TIME: number;
-const VIEWPORT = { width: 1366, height: 768 };
 let db: DbClient;
 let browser: puppeteer.Browser;
 
@@ -442,7 +441,7 @@ function clickAd(
   });
 }
 
-export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entry) {
+export async function crawl(extraPuppeteer: PuppeteerExtra, flags: CrawlerFlags, postgres: Client, profile: Entry) {
   if (!fs.existsSync(flags.screenshotDir)) {
     console.log(`${flags.screenshotDir} is not a valid directory`);
     process.exit(1);
@@ -456,35 +455,6 @@ export async function crawl(flags: CrawlerFlags, postgres: Client, profile: Entr
   console.log(flags);
   db = new DbClient(postgres);
 
-  // Open browser
-  log.info('Launching browser...');
-  const extraPuppeteer = addExtra(puppeteer);
-  const stealthPlugin = StealthPlugin();
-  stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
-  stealthPlugin.enabledEvasions.delete('navigator.plugins');
-  extraPuppeteer.use(stealthPlugin);
-  const profileStr = env['PROFILE'];
-
-  const profileDirectory = env['PROFILE_DIR'] ? `${env['PROFILE_DIR']}/${profileStr}` : `user-data/${profileStr}`;
-
-  // Cleanup cache in profile data
-  rimraf.sync(path.join(profileDirectory, 'DevToolsActivePort'));
-  rimraf.sync(path.join(profileDirectory, 'Default', 'Cache'));
-  rimraf.sync(path.join(profileDirectory, 'Default', 'Code Cache'));
-  rimraf.sync(path.join(profileDirectory, 'Default', 'DawnCache'));
-
-  const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
-    devtools: false,
-    slowMo: 10, // slow down by 10ms
-    defaultViewport: VIEWPORT,
-    headless: true,
-  };
-  const chromePath = env['CHROME_PATH'];
-  if (chromePath) {
-    console.log("Using Google Chrome from ", chromePath);
-    launchOptions['executablePath'] = chromePath as string;
-  }
   //@ts-ignore
   browser = await extraPuppeteer.launch(launchOptions);
 
