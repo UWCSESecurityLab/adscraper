@@ -241,9 +241,10 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
   stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
   stealthPlugin.enabledEvasions.delete('navigator.plugins');
   extraPuppeteer.use(stealthPlugin);
+  const profileDirectory = "."
 
   try {
-    await crawler.crawl(extraPuppeteer,{
+    await crawler.crawl(profileDirectory, extraPuppeteer,{
       clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
       crawlArticle: options.crawl_article ? true : false,
       crawlerHostname: options.crawler_hostname,

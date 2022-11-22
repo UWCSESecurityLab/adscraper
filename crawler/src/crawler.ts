@@ -441,7 +441,7 @@ function clickAd(
   });
 }
 
-export async function crawl(extraPuppeteer: PuppeteerExtra, flags: CrawlerFlags, postgres: Client, profile: Entry) {
+export async function crawl(profileDirectory: string, extraPuppeteer: PuppeteerExtra, flags: CrawlerFlags, postgres: Client, profile: Entry) {
   if (!fs.existsSync(flags.screenshotDir)) {
     console.log(`${flags.screenshotDir} is not a valid directory`);
     process.exit(1);
@@ -454,6 +454,20 @@ export async function crawl(extraPuppeteer: PuppeteerExtra, flags: CrawlerFlags,
   setupGlobals(flags);
   console.log(flags);
   db = new DbClient(postgres);
+
+  const VIEWPORT = { width: 1366, height: 768 };
+  const launchOptions = {
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
+    devtools: false,
+    slowMo: 10, // slow down by 10ms
+    defaultViewport: VIEWPORT,
+    headless: true,
+  };
+  const chromePath = env['CHROME_PATH'];
+  if (chromePath) {
+    console.log("Using Google Chrome from ", chromePath);
+    launchOptions['executablePath'] = chromePath as string;
+  }
 
   //@ts-ignore
   browser = await extraPuppeteer.launch(launchOptions);

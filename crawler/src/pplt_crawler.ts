@@ -112,23 +112,9 @@ rimraf.sync(path.join(profileDirectory, 'Default', 'Cache'));
 rimraf.sync(path.join(profileDirectory, 'Default', 'Code Cache'));
 rimraf.sync(path.join(profileDirectory, 'Default', 'DawnCache'));
 
-const VIEWPORT = { width: 1366, height: 768 };
-const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
-    devtools: false,
-    slowMo: 10, // slow down by 10ms
-    defaultViewport: VIEWPORT,
-    headless: true,
-};
-const chromePath = env['CHROME_PATH'];
-if (chromePath) {
-    console.log("Using Google Chrome from ", chromePath);
-    launchOptions['executablePath'] = chromePath as string;
-}
-
 for (let site of _.shuffle(sites)) {
     try {
-        await crawler.crawl(extraPuppeteer,{
+        await crawler.crawl(profileDirectory, extraPuppeteer, {
             clearCookiesBeforeCT: false,
             crawlArticle: true,
             crawlerHostname: options.crawler_hostname,
