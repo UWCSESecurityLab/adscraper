@@ -5,7 +5,7 @@ import {getProfile} from "./init-creds.js";
 const { Client } = pkg;
 import {env, exit} from "process";
 import _ from "lodash";
-import * as log from "./log";
+import * as log from "./log.js";
 import {addExtra} from "puppeteer-extra";
 import puppeteer from "puppeteer";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
