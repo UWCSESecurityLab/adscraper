@@ -223,7 +223,12 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
 
       console.log("Beginning scroll");
       for (let counter: number = 0; counter < 60; counter++) {
-        await scrollRandomly(page);
+        try {
+          await scrollRandomly(page);
+        } catch (e) {
+          console.log(e)
+          break
+        }
       }
 
       const ads = await adDetection.identifyAdsInDOM(page);
