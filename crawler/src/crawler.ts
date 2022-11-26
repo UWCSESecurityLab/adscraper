@@ -513,6 +513,7 @@ export async function crawl(profileDirectory: string, extraPuppeteer: PuppeteerE
 
     // Open the seed page
     log.info(`${flags.url}: loading page`);
+    await browser.newPage()
     let seedPage = (await browser.pages())[0];
     if (!flags.skipCrawlingSeedUrl && !flags.warmingCrawl) {
       await domMonitor.injectDOMListener(seedPage);
