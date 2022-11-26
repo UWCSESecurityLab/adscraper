@@ -461,10 +461,12 @@ export async function crawl(profileDirectory: string, extraPuppeteer: PuppeteerE
   db = new DbClient(postgres);
 
   const VIEWPORT = { width: 1366, height: 768 };
+  const chromeArgs = ['--disable-gpu', '--no-sandbox', '--disable-setuid-sandbox',
+    '--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`]
   const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
+    args: chromeArgs,
     devtools: false,
-    slowMo: 5, // slow down by 10ms
+    slowMo: 10, // slow down by 10ms
     defaultViewport: VIEWPORT,
     headless: true,
   };
