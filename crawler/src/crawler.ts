@@ -462,9 +462,9 @@ export async function crawl(profileDirectory: string, extraPuppeteer: PuppeteerE
 
   const VIEWPORT = { width: 1366, height: 768 };
   const launchOptions = {
-    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`, '--disable-gpu'],
+    args: ['--no-default-browser-check', '--disable-dev-shm-usage', `--user-data-dir=${profileDirectory}`],
     devtools: false,
-    slowMo: 10, // slow down by 10ms
+    slowMo: 5, // slow down by 10ms
     defaultViewport: VIEWPORT,
     headless: true,
   };
