@@ -116,7 +116,7 @@ for (let site of _.shuffle(sites)) {
     try {
         await crawler.crawl(profileDirectory, extraPuppeteer, {
             clearCookiesBeforeCT: false,
-            crawlArticle: true,
+            crawlArticle: false,
             crawlerHostname: options.crawler_hostname,
             crawlPageWithAds: true,
             dataset: 'test',
