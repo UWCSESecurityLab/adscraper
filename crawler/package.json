@@ -7,6 +7,7 @@
     "build": "tsc",
     "crawl": "node src/crawler.js localhost 1",
     "ads": "npm run build && node src/pplt_crawler.js",
+    "generate-concepts": "npm run build && node src/ads-concepts-generator.js",
     "build:docker": "docker build -t puppeteer-chrome-linux .",
     "run:docker": "docker run -i --init --rm --cap-add=SYS_ADMIN  --net adscraper --name puppeteer-chrome -v /data/screenshots:/data/screenshots puppeteer-chrome-linux",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -30,6 +31,7 @@
     "@types/uuid": "^7.0.4",
     "@types/xml2js": "^0.4.5",
     "buttercup": "^6.16.5",
+    "clarifai-nodejs-grpc": "^8.0.0",
     "cli-progress": "^3.8.2",
     "command-line-args": "^5.1.1",
     "command-line-usage": "^6.1.0",
