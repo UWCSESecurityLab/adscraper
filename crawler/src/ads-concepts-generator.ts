@@ -44,6 +44,7 @@ stub.PostModelOutputs(
         }
 
         const outputsArray = response.outputs;
+        let imageConceptsCsv = "";
         let overallAllConceptsArray = [];
         let overallUniqueConceptsSet = new Set();
         for (let idx = 0; idx < imageFileNamesArray.length; idx++) {
@@ -55,9 +56,10 @@ stub.PostModelOutputs(
                 overallAllConceptsArray.push(concept.name);
                 overallUniqueConceptsSet.add(concept.name);
             }
-            // TODO: save to CSV
-            // console.log("Concepts for " + imageFileName + ": " + conceptNamesArray.toString());
+            imageConceptsCsv += [imageFileName, conceptNamesArray.toString()].join(",") + "\r\n";
         }
+        fs.writeFileSync(screenshotDirectory + "image-concepts-data.csv", imageConceptsCsv);
+
         // TODO: save
         console.log(Array.from(overallUniqueConceptsSet.values()).toString());
 
