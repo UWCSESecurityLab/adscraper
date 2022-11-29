@@ -41,9 +41,9 @@ stub.PostModelOutputs(
             throw new Error(err);
         }
 
-        if (response.status.code !== 10000) {
-            throw new Error("Post model outputs failed, status: " + response.status.description);
-        }
+        // if (response.status.code !== 10000) {
+        //     throw new Error("Post model outputs failed, status: " + response.status.description);
+        // }
 
         const outputsArray = response.outputs;
         let imageConceptsCsv = "";
@@ -60,10 +60,10 @@ stub.PostModelOutputs(
             }
             imageConceptsCsv += [imageFileName, conceptNamesArray.toString()].join(",") + "\r\n";
         }
-        fs.writeFileSync(screenshotDirectory + "per-image-concepts.csv", imageConceptsCsv);
+        fs.writeFileSync(screenshotDirectory + "/per-image-concepts.csv", imageConceptsCsv);
 
         fs.writeFileSync(
-            screenshotDirectory + "overall-unique-concepts-set.txt",
+            screenshotDirectory + "/overall-unique-concepts-set.txt",
             Array.from(overallUniqueConceptsSet.values()).toString()
         );
 
@@ -74,6 +74,6 @@ stub.PostModelOutputs(
         for (const key in count) {
             countCsv += [key, count[key].toString()].join(",") + "\r\n";
         }
-        fs.writeFileSync(screenshotDirectory + "overall-concepts-frequency-data.csv", countCsv)
+        fs.writeFileSync(screenshotDirectory + "/overall-concepts-frequency-data.csv", countCsv)
     }
 );
