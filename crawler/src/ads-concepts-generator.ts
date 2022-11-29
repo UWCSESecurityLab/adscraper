@@ -23,7 +23,7 @@ let inputsArray = [];
 fs.readdirSync(screenshotDirectory).forEach(function(image_filepath) {
     if (image_filepath.slice(-5).toString() == '.webp') {
         imageFileNamesArray.push(image_filepath);
-        const imageBytes = fs.readFileSync(screenshotDirectory + "/" + image_filepath);
+        const imageBytes = fs.readFileSync(screenshotDirectory + "/" + image_filepath).toString('base64');
         inputsArray.push(
             { data: { image: { base64: imageBytes } } }
         );
@@ -41,9 +41,10 @@ stub.PostModelOutputs(
             throw new Error(err);
         }
 
-        // if (response.status.code !== 10000) {
-        //     throw new Error("Post model outputs failed, status: " + response.status.description);
-        // }
+        if (response.status.code !== 10000) {
+            console.log("Received failed status:\n" + JSON.stringify(response.status, null, 4));
+            return;
+        }
 
         const outputsArray = response.outputs;
         let imageConceptsCsv = "";
