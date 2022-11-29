@@ -21,11 +21,13 @@ metadata.set("authorization", "Key " + API_KEY);
 let imageFileNamesArray = []
 let inputsArray = [];
 fs.readdirSync(screenshotDirectory).forEach(function(image_filepath) {
-    imageFileNamesArray.push(image_filepath);
-    const imageBytes = fs.readFileSync(screenshotDirectory + "/" + image_filepath);
-    inputsArray.push(
-        { data: { image: { base64: imageBytes } } }
-    );
+    if (image_filepath.slice(-5).toString() == '.webp') {
+        imageFileNamesArray.push(image_filepath);
+        const imageBytes = fs.readFileSync(screenshotDirectory + "/" + image_filepath);
+        inputsArray.push(
+            { data: { image: { base64: imageBytes } } }
+        );
+    }
 });
 
 stub.PostModelOutputs(
@@ -58,14 +60,20 @@ stub.PostModelOutputs(
             }
             imageConceptsCsv += [imageFileName, conceptNamesArray.toString()].join(",") + "\r\n";
         }
-        fs.writeFileSync(screenshotDirectory + "image-concepts-data.csv", imageConceptsCsv);
+        fs.writeFileSync(screenshotDirectory + "per-image-concepts.csv", imageConceptsCsv);
 
-        // TODO: save
-        console.log(Array.from(overallUniqueConceptsSet.values()).toString());
+        fs.writeFileSync(
+            screenshotDirectory + "overall-unique-concepts-set.txt",
+            Array.from(overallUniqueConceptsSet.values()).toString()
+        );
 
         // generate frequency of overall concepts
-        const count = {};
-        // TODO: save
-        overallAllConceptsArray.forEach(e => count[e] ? count[e]++ : count[e] = 1 );
+        const count: { [index: string]: number; } = {};
+        overallAllConceptsArray.forEach(e => count[e] ? count[e]++ : count[e] = 1);
+        let countCsv = "";
+        for (const key in count) {
+            countCsv += [key, count[key].toString()].join(",") + "\r\n";
+        }
+        fs.writeFileSync(screenshotDirectory + "overall-concepts-frequency-data.csv", countCsv)
     }
 );
