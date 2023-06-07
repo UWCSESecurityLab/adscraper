@@ -22,7 +22,7 @@ The schema and related documentation of data formats can be found in
 #     "-h localhost"
 # If you use a custom port (default is 5432), add the option
 #     "-p <YOUR_POSTGRES_PORT>"
-psql -d adscraper -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
+psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
 ## Setup (for Docker-based crawls)
