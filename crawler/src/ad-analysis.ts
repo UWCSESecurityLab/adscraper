@@ -1,10 +1,10 @@
 import puppeteer from 'puppeteer';
 import { Client } from 'pg';
-import DbClient from './db';
+import DbClient from './db.js';
 
 let db: DbClient, postgres: Client, browser: puppeteer.Browser;
 
-interface ScrapedHTML{
+interface ScrapedHTML {
   adId: number,
   iframeId?: number,
   html: string,
@@ -12,13 +12,13 @@ interface ScrapedHTML{
 
 async function extractDomainsFromAds() {
   const results = await postgres.query('SELECT id, html FROM ad WHERE html IS NOT NULL');
-  let scrapedHtmls = results.rows.map(row => { return { adId: row.id, html: row.html }});
+  let scrapedHtmls = results.rows.map(row => { return { adId: row.id, html: row.html } });
   await extractDomains(scrapedHtmls);
 }
 
 async function extractDomainsFromIframes() {
   const results = await postgres.query('SELECT id, parent_ad, html FROM iframe WHERE html IS NOT NULL');
-  let scrapedHtmls = results.rows.map(row => { return { adId: row.parent_ad, iframeId: row.id, html: row.html }});
+  let scrapedHtmls = results.rows.map(row => { return { adId: row.parent_ad, iframeId: row.id, html: row.html } });
   await extractDomains(scrapedHtmls, 'subframe_');
 }
 
@@ -51,11 +51,13 @@ async function extractDomains(scrapedHtmls: ScrapedHTML[], typePrefix?: string) 
           try {
             let hostname = new URL(d).hostname;
             await db.insertAdDomain({
-              ad_id: scrapedHtml.adId, iframe_id: scrapedHtml.iframeId, url: d, hostname: hostname, type: type });
-          } catch(e) {
+              ad_id: scrapedHtml.adId, iframe_id: scrapedHtml.iframeId, url: d, hostname: hostname, type: type
+            });
+          } catch (e: any) {
             if (e.name === 'TypeError') {
               await db.insertAdDomain({
-                ad_id: scrapedHtml.adId, iframe_id: scrapedHtml.iframeId, url: d, type: type });
+                ad_id: scrapedHtml.adId, iframe_id: scrapedHtml.iframeId, url: d, type: type
+              });
             } else {
               console.log(e);
             }
@@ -69,7 +71,7 @@ async function extractDomains(scrapedHtmls: ScrapedHTML[], typePrefix?: string) 
       await insertDomains(imgSrcs, `${typePrefix ? typePrefix : ''}img_src`)
 
       await page.close();
-    } catch(e) {
+    } catch (e) {
       console.log(`Error processing Ad ID: ${scrapedHtml.adId}, iframe ID: ${scrapedHtml.iframeId}`);
       console.log(e);
     }

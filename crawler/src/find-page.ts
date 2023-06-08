@@ -1,7 +1,7 @@
 import puppeteer from 'puppeteer';
-import * as log from './log';
-import getArticleFromRSS from './get-rss-article';
-import * as adDetection from './ad-detection';
+import * as log from './log.js';
+import getArticleFromRSS from './get-rss-article.js';
+import * as adDetection from './ad-detection.js';
 import fs from 'fs';
 
 /**
@@ -47,7 +47,7 @@ export async function randomGuessPage(
         await guessPage.close();
         return url;
       }
-    } catch (e) {
+    } catch (e: any) {
       if (e.name === 'TimeoutError') {
         // log.info(`${page.url()}: TimeoutError - did not find a page meeting the criteria at ${url}`);
         continue;

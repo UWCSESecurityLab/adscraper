@@ -1,7 +1,7 @@
 import { Client } from 'pg';
-import { ScrapedIFrame } from './iframe-scraper';
-import * as log from './log';
-import { ExternalDomains } from './domain-extractor';
+import { ScrapedIFrame } from './iframe-scraper.js';
+import * as log from './log.js';
+import { ExternalDomains } from './domain-extractor.js';
 
 export interface dbInsertOptions {
   table: string,
@@ -106,7 +106,7 @@ export default class DbClient {
       for (let child of iframe.children) {
         await this.archiveScrapedIFrame(child, adId, frameId);
       }
-    } catch (e) {
+    } catch (e: any) {
       log.strError('Error while archiving iframe ' + iframe.url);
       log.error(e);
     }

@@ -1,13 +1,13 @@
 import fs from 'fs';
-import path from 'path';
-import request from 'request';
+import fetch from 'node-fetch';
 
-request.get('https://raw.githubusercontent.com/easylist/easylist/master/easylist/easylist_general_hide.txt', (err, res, body) => {
-  if (err) {
-    console.log(err);
+fetch('https://raw.githubusercontent.com/easylist/easylist/master/easylist/easylist_general_hide.txt').then(res => {
+  if (!res.ok) {
+    console.log(res.statusText);
     process.exit(1);
   }
-  const raw = body as string;
+  return res.text();
+}).then(raw => {
   const rows = raw.split('\n');
   const selectorRows = rows
       .filter(r => r.startsWith('##'))

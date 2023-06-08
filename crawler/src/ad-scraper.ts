@@ -2,7 +2,7 @@ import path from 'path';
 import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
-import * as log from './log';
+import * as log from './log.js';
 
 export interface AdHandles {
   clickTarget: puppeteer.ElementHandle,
@@ -39,12 +39,12 @@ interface ScrapedAd {
  * after waiting a few seconds.
 */
 export async function scrape(
-    page: puppeteer.Page,
-    ad: puppeteer.ElementHandle,
-    screenshotDir: string,
-    externalScreenshotDir: string | undefined,
-    screenshotHost: string,
-    withContext: boolean): Promise<ScrapedAd> {
+  page: puppeteer.Page,
+  ad: puppeteer.ElementHandle,
+  screenshotDir: string,
+  externalScreenshotDir: string | undefined,
+  screenshotHost: string,
+  withContext: boolean): Promise<ScrapedAd> {
 
   // Collect the HTML content
   const html = await page.evaluate((e: Element) => e.outerHTML, ad);
@@ -71,6 +71,10 @@ export async function scrape(
     }
 
     const viewport = page.viewport();
+    if (!viewport) {
+      throw new Error('Page has no viewport');
+    }
+
     // Round the bounding box values in case they are non-integers
     let adBB = {
       left: Math.floor(abb.x),
@@ -86,11 +90,11 @@ export async function scrape(
     const marginTop = adBB.top - contextTop;
     const marginLeft = adBB.left - contextLeft;
     const marginBottom = adBB.top + adBB.height + margin < viewport.height
-        ? margin
-        : viewport.height - adBB.height - adBB.top;
+      ? margin
+      : viewport.height - adBB.height - adBB.top;
     const marginRight = adBB.left + adBB.width + margin < viewport.width
-        ? margin
-        : viewport.width - adBB.width - adBB.left;
+      ? margin
+      : viewport.width - adBB.width - adBB.left;
     const contextWidth = adBB.width + marginLeft + marginRight;
     const contextHeight = adBB.height + marginTop + marginBottom;
 
@@ -119,7 +123,7 @@ export async function scrape(
       .webp({ lossless: true })
       .toFile(savePath);
 
-  } catch (e) {
+  } catch (e: any) {
     screenshotFailed = true;
     log.warning('Couldn\'t capture screenshot');
     log.warning(e.message);

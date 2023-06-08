@@ -1,20 +1,20 @@
 import fs from 'fs';
 import { Client } from 'pg';
+import { publicIpv4, publicIpv6 } from 'public-ip';
 import puppeteer from 'puppeteer';
 import sourceMapSupport from 'source-map-support';
-import * as adDetection from './ad-detection';
-import * as adScraper from './ad-scraper';
-import { splitChumbox } from './chumbox-scraper';
-import DbClient from './db';
-import { extractExternalDomains } from './domain-extractor';
-import { findArticle, findPageWithAds } from './find-page';
-import * as iframeScraper from './iframe-scraper';
-import * as log from './log';
-import * as pageScraper from './page-scraper';
-import { PageType } from './page-scraper';
-import * as trackingEvasion from './tracking-evasion';
-import * as domMonitor from './dom-monitor';
-import publicIp from 'public-ip';
+import * as adDetection from './ad-detection.js';
+import * as adScraper from './ad-scraper.js';
+import { splitChumbox } from './chumbox-scraper.js';
+import DbClient from './db.js';
+import * as domMonitor from './dom-monitor.js';
+import { extractExternalDomains } from './domain-extractor.js';
+import { findArticle, findPageWithAds } from './find-page.js';
+import * as iframeScraper from './iframe-scraper.js';
+import * as log from './log.js';
+import * as pageScraper from './page-scraper.js';
+import { PageType } from './page-scraper.js';
+import * as trackingEvasion from './tracking-evasion.js';
 
 sourceMapSupport.install();
 
@@ -104,8 +104,8 @@ interface CrawlAdMetadata {
  * done crawling/saving.
  */
 async function crawlAd(ad: puppeteer.ElementHandle,
-                       page: puppeteer.Page,
-                       metadata: CrawlAdMetadata): Promise<number> {
+  page: puppeteer.Page,
+  metadata: CrawlAdMetadata): Promise<number> {
   let [timeout, timeoutId] = createAsyncTimeout<number>(
     `${page.url()}: timed out while crawling ad`, AD_CRAWL_TIMEOUT);
   const _crawlAd = (async () => {
@@ -191,10 +191,10 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
       let pageId = -1;
       if (!flags.warmingCrawl) {
         const scrapedPage = await pageScraper.scrape(
-            page,
-            flags.screenshotDir,
-            flags.externalScreenshotDir,
-            flags.crawlerHostname);
+          page,
+          flags.screenshotDir,
+          flags.externalScreenshotDir,
+          flags.crawlerHostname);
         pageId = await db.archivePage({
           crawl_id: metadata.crawlId,
           job_id: flags.jobId,
@@ -259,12 +259,12 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
               log.warning(`Aborting click on ad ${adId}: no bounding box`);
               continue;
             }
-            if (bounds.height < 10 || bounds.width < 10 ) {
+            if (bounds.height < 10 || bounds.width < 10) {
               log.warning(`Aborting click on ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
               continue;
             }
             await clickAd(adHandle.clickTarget, page, metadata.currentDepth, metadata.crawlId, pageId, adId);
-          } catch (e) {
+          } catch (e: any) {
             log.error(e);
           }
         }
@@ -300,12 +300,12 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
  * and any sub pages opened by clicking on ads in the linked page.
  */
 function clickAd(
-    ad: puppeteer.ElementHandle,
-    page: puppeteer.Page,
-    parentDepth: number,
-    crawlId: number,
-    pageId: number,
-    adId: number) {
+  ad: puppeteer.ElementHandle,
+  page: puppeteer.Page,
+  parentDepth: number,
+  crawlId: number,
+  pageId: number,
+  adId: number) {
   // log.info(`${page.url()}: Clicking ad`)
   return new Promise<void>((resolve, reject) => {
     let ctPage: puppeteer.Page | undefined;
@@ -356,7 +356,7 @@ function clickAd(
           if (!flags.warmingCrawl) {
             await domMonitor.injectDOMListener(newPage)
           }
-          await newPage.goto(req.url(), {referer: req.headers().referer});
+          await newPage.goto(req.url(), { referer: req.headers().referer });
           log.info(`${newPage.url()}: manually opened in new tab`);
           await crawlPage(newPage, {
             pageType: PageType.LANDING,
@@ -409,7 +409,7 @@ function clickAd(
     });
 
     // Take care of a few things before clicking on the ad:
-    (async function() {
+    (async function () {
       if (flags.clearCookiesBeforeCT) {
         // Clear all cookies to minimize tracking from prior clickthroughs.
         const cdp = await page.target().createCDPSession();
@@ -549,7 +549,7 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
     await seedPage.close();
     await browser.close();
     log.info('Crawl job completed');
-  } catch (e) {
+  } catch (e: any) {
     log.error(e);
     await browser.close();
     throw e;
@@ -573,14 +573,14 @@ async function setCrawlerIpField(jobId: number, postgres: Client) {
 
 async function getPublicIp() {
   try {
-    let v4 = await publicIp.v4();
+    let v4 = await publicIpv4();
     if (v4) {
       return v4;
     }
   } catch (e) {
     console.log(e);
     try {
-      let v6 = await publicIp.v6();
+      let v6 = await publicIpv6();
       if (v6) {
         return v6;
       }

@@ -1,5 +1,5 @@
 import { ElementHandle } from 'puppeteer';
-import { AdHandles } from './ad-scraper';
+import { AdHandles } from './ad-scraper.js';
 
 export async function splitChumbox(ad: ElementHandle) {
   return {
@@ -25,27 +25,23 @@ export async function splitChumbox(ad: ElementHandle) {
  *          Otherwise returns null.
  */
 async function splitTopContextAd(
-    container: ElementHandle, linkSelector: string, parentDepth: number) {
+  container: ElementHandle, linkSelector: string, parentDepth: number) {
   let link = await container.$$(linkSelector);
   if (link.length === 0) {
     return null;
   }
 
   let fullAd = await Promise.all(link.map(async (l) => {
-    let ec = await container.executionContext();
-    if (ec) {
-      let parentHandle = await ec.evaluateHandle((e: Element, depth: number) => {
-        let current = e;
-        for (let i = 0; i < depth; i++) {
-          if (current.parentElement) {
-            current = current.parentElement;
-          }
+    let parentHandle = await container.evaluateHandle((e: Element, depth: number) => {
+      let current = e;
+      for (let i = 0; i < depth; i++) {
+        if (current.parentElement) {
+          current = current.parentElement;
         }
-        return current;
-      }, l, parentDepth);
-      return parentHandle.asElement();
-    }
-    return null;
+      }
+      return current;
+    }, parentDepth);
+    return parentHandle.asElement();
   }));
   let tuples: AdHandles[] = [];
   for (let i = 0; i < link.length; i++) {

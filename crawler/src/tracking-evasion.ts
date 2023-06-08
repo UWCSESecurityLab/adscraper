@@ -1,4 +1,4 @@
-import * as log from './log';
+import * as log from './log.js';
 import puppeteer from 'puppeteer';
 
 
@@ -6,7 +6,7 @@ import puppeteer from 'puppeteer';
 // imitate a windows based machine.
 export async function spoofUserAgent(browser: puppeteer.Browser) {
   const version = await browser.version();
-  browser.on('targetcreated', (target) => {
+  browser.on('targetcreated', (target: puppeteer.Target) => {
     if (target.type() !== 'page') {
       return;
     }
@@ -100,7 +100,7 @@ export async function disableCookies(
           .shadowRoot.querySelector("#advancedPage > settings-section.expanded > settings-privacy-page")
           .shadowRoot.querySelector("#pages > settings-subpage > settings-toggle-button");
     });
-    browser.on('targetcreated', (target) => {
+    browser.on('targetcreated', (target: puppeteer.Target) => {
       if (target.type() !== 'page') {
         return;
       }
