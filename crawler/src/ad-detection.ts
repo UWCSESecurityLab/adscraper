@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { ElementHandle, JSHandle, Page } from 'puppeteer';
 import easylist from './easylist_selectors.json';
 
 const combinedSelectors = easylist.concat([
@@ -16,9 +16,9 @@ const combinedSelectors = easylist.concat([
  * @returns A much smaller array of selectors for matching elements.
  */
 export async function identifyAdsInDOM(
-    page: puppeteer.Page) {
+    page: Page) {
 
-  const ads: puppeteer.JSHandle<Element[]> =
+  const ads: JSHandle<Element[]> =
     await page.evaluateHandle((selectors: string[]) => {
       try {
         // Execute all of the input query selectors and collect results in a set.
@@ -58,10 +58,10 @@ export async function identifyAdsInDOM(
     }, combinedSelectors);
 
   const numAds = await ads.evaluate((ads) => ads.length);
-  const adHandles = new Set<puppeteer.ElementHandle>();
+  const adHandles = new Set<ElementHandle>();
   for (let i = 0; i < numAds; i++) {
     let ad = await ads.evaluateHandle((ads, idx: number) => ads[idx], i);
-    adHandles.add(ad as puppeteer.ElementHandle);
+    adHandles.add(ad as ElementHandle);
   }
   return adHandles;
 }
@@ -72,8 +72,8 @@ export async function identifyAdsInDOM(
 //  * @param selectors CSS selectors for ads on this page
 //  * @returns A Map of ElementHandles->id for each matching selector
 //  */
-// export async function getHandlesToAds(page: puppeteer.Page, selectors: string[]) {
-//   const elements = new Set<puppeteer.ElementHandle>();
+// export async function getHandlesToAds(page: Page, selectors: string[]) {
+//   const elements = new Set<ElementHandle>();
 //   for (let selector of selectors) {
 //     let selected = await page.$(selector);
 //     if (selected) {

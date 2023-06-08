@@ -1,7 +1,7 @@
-import puppeteer from 'puppeteer';
-import * as log from './log.js';
-import getArticleFromRSS from './get-rss-article.js';
-import * as adDetection from './ad-detection.js';
+import { Page } from 'puppeteer';
+import * as log from './log';
+import getArticleFromRSS from './get-rss-article';
+import * as adDetection from './ad-detection';
 import fs from 'fs';
 
 /**
@@ -14,9 +14,9 @@ import fs from 'fs';
  * @returns URL for the first matching page, or undefined if no page was found.
  */
 export async function randomGuessPage(
-    page: puppeteer.Page,
+    page: Page,
     maxGuesses: number,
-    guessCriteria: (page: puppeteer.Page) => Promise<boolean>) {
+    guessCriteria: (page: Page) => Promise<boolean>) {
   const sameDomainLinks = await page.evaluate(() => {
     return Array.from(document.querySelectorAll('a'))
       .map(a => a.href)
@@ -73,7 +73,7 @@ export async function randomGuessPage(
  * @param page Page to look for articles on
  * @returns Article URL, or undefined if no article was found.
  */
-export async function findArticle(page: puppeteer.Page) {
+export async function findArticle(page: Page) {
   let articleUrl: string | undefined;
 
   log.info(`${page.url()}: Looking for article via RSS`);
@@ -83,7 +83,7 @@ export async function findArticle(page: puppeteer.Page) {
   }
 
   log.info(`${page.url()}: Looking for article by randomly guessing links`);
-  return randomGuessPage(page, 20, async (page: puppeteer.Page) => {
+  return randomGuessPage(page, 20, async (page: Page) => {
     await page.evaluate(isReaderableScript);
     return page.evaluate(() => {
       // @ts-ignore
@@ -92,8 +92,8 @@ export async function findArticle(page: puppeteer.Page) {
   });
 }
 
-export async function findPageWithAds(page: puppeteer.Page) {
-  return randomGuessPage(page, 20, async (page: puppeteer.Page) => {
+export async function findPageWithAds(page: Page) {
+  return randomGuessPage(page, 20, async (page: Page) => {
     const ads = await adDetection.identifyAdsInDOM(page)
     return ads.size > 0;
   });

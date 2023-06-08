@@ -1,5 +1,5 @@
 import { ElementHandle } from 'puppeteer';
-import { AdHandles } from './ad-scraper.js';
+import { AdHandles } from './ad-scraper';
 
 export async function splitChumbox(ad: ElementHandle) {
   return {

@@ -1,8 +1,8 @@
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import { Client } from 'pg';
-import DbClient from './db.js';
+import DbClient from './db';
 
-let db: DbClient, postgres: Client, browser: puppeteer.Browser;
+let db: DbClient, postgres: Client, browser: Browser;
 
 interface ScrapedHTML {
   adId: number,

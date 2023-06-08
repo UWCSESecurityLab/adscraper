@@ -4,8 +4,8 @@ import fs from 'fs';
 import { Client } from 'pg';
 import sourceMapSupport from 'source-map-support';
 import os from 'os';
-import * as crawler from './crawler.js';
-import * as log from './log.js';
+import * as crawler from './crawler';
+import * as log from './log';
 sourceMapSupport.install();
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [

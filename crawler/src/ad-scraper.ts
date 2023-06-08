@@ -1,12 +1,12 @@
 import path from 'path';
-import puppeteer from 'puppeteer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
-import * as log from './log.js';
+import * as log from './log';
+import { BoundingBox, ElementHandle, Page } from 'puppeteer';
 
 export interface AdHandles {
-  clickTarget: puppeteer.ElementHandle,
-  screenshotTarget: puppeteer.ElementHandle | null
+  clickTarget: ElementHandle,
+  screenshotTarget: ElementHandle | null
 }
 
 interface ScrapedAd {
@@ -39,8 +39,8 @@ interface ScrapedAd {
  * after waiting a few seconds.
 */
 export async function scrape(
-  page: puppeteer.Page,
-  ad: puppeteer.ElementHandle,
+  page: Page,
+  ad: ElementHandle,
   screenshotDir: string,
   externalScreenshotDir: string | undefined,
   screenshotHost: string,
@@ -146,7 +146,7 @@ export async function scrape(
   }
 }
 
-function toRegion(bb: puppeteer.BoundingBox): sharp.Region {
+function toRegion(bb: BoundingBox): sharp.Region {
   return {
     left: bb.x,
     top: bb.y,
@@ -160,7 +160,7 @@ function toRegion(bb: puppeteer.BoundingBox): sharp.Region {
  * if available on the page.
  * @param ad The ad to get bid values from.
  */
-function getPrebidBidsForAd(ad: puppeteer.ElementHandle) {
+function getPrebidBidsForAd(ad: ElementHandle) {
   return ad.evaluate((ad: Element) => {
     // Check if the page has prebid
     // @ts-ignore

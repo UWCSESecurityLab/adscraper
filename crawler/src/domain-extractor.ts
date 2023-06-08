@@ -1,4 +1,4 @@
-import puppeteer from 'puppeteer';
+import { ElementHandle } from 'puppeteer';
 
 export interface ExternalDomains {
   anchorHrefs: string[],
@@ -7,7 +7,7 @@ export interface ExternalDomains {
   imgSrcs: string[]
 }
 
-export async function extractExternalDomains(handle: puppeteer.ElementHandle) {
+export async function extractExternalDomains(handle: ElementHandle) {
   const anchorHrefs = await handle.$$eval('a', (elements) => {
     let anchors = elements as HTMLAnchorElement[];
     return anchors.map(a => a.href);

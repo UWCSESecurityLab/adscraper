@@ -1,20 +1,20 @@
 import fs from 'fs';
 import { Client } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser, ElementHandle, Page } from 'puppeteer';
 import sourceMapSupport from 'source-map-support';
-import * as adDetection from './ad-detection.js';
-import * as adScraper from './ad-scraper.js';
-import { splitChumbox } from './chumbox-scraper.js';
-import DbClient from './db.js';
-import * as domMonitor from './dom-monitor.js';
-import { extractExternalDomains } from './domain-extractor.js';
-import { findArticle, findPageWithAds } from './find-page.js';
-import * as iframeScraper from './iframe-scraper.js';
-import * as log from './log.js';
-import * as pageScraper from './page-scraper.js';
-import { PageType } from './page-scraper.js';
-import * as trackingEvasion from './tracking-evasion.js';
+import * as adDetection from './ad-detection';
+import * as adScraper from './ad-scraper';
+import { splitChumbox } from './chumbox-scraper';
+import DbClient from './db';
+import * as domMonitor from './dom-monitor';
+import { extractExternalDomains } from './domain-extractor';
+import { findArticle, findPageWithAds } from './find-page';
+import * as iframeScraper from './iframe-scraper';
+import * as log from './log';
+import * as pageScraper from './page-scraper';
+import { PageType } from './page-scraper';
+import * as trackingEvasion from './tracking-evasion';
 
 sourceMapSupport.install();
 
@@ -48,7 +48,7 @@ let AD_SLEEP_TIME: number;
 let PAGE_SLEEP_TIME: number;
 const VIEWPORT = { width: 1366, height: 768 };
 let db: DbClient;
-let browser: puppeteer.Browser;
+let browser: Browser;
 
 function setupGlobals(crawlerFlags: CrawlerFlags) {
   flags = crawlerFlags;
@@ -103,8 +103,8 @@ interface CrawlAdMetadata {
  * @returns Promise containing the database id of the scraped ad, once it is
  * done crawling/saving.
  */
-async function crawlAd(ad: puppeteer.ElementHandle,
-  page: puppeteer.Page,
+async function crawlAd(ad: ElementHandle,
+  page: Page,
   metadata: CrawlAdMetadata): Promise<number> {
   let [timeout, timeoutId] = createAsyncTimeout<number>(
     `${page.url()}: timed out while crawling ad`, AD_CRAWL_TIMEOUT);
@@ -180,7 +180,7 @@ interface CrawlPageMetadata {
  * @param metadata Crawler metadata linked to this page.
  * @returns Promise that resolves when the page is crawled.
  */
-async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Promise<void> {
+async function crawlPage(page: Page, metadata: CrawlPageMetadata): Promise<void> {
   log.info(`${page.url()}: Scraping page`);
   await page.waitForTimeout(PAGE_SLEEP_TIME);
   let [timeout, timeoutId] = createAsyncTimeout<void>(
@@ -215,7 +215,7 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
       const ads = await adDetection.identifyAdsInDOM(page);
       log.info(`${page.url()}: ${ads.size} ads identified`);
 
-      const adHandleToAdId = new Map<puppeteer.ElementHandle, number>();
+      const adHandleToAdId = new Map<ElementHandle, number>();
       for (let ad of ads) {
         // Check if the ad contain a chumbox
         let adHandles: adScraper.AdHandles[];
@@ -300,15 +300,15 @@ async function crawlPage(page: puppeteer.Page, metadata: CrawlPageMetadata): Pro
  * and any sub pages opened by clicking on ads in the linked page.
  */
 function clickAd(
-  ad: puppeteer.ElementHandle,
-  page: puppeteer.Page,
+  ad: ElementHandle,
+  page: Page,
   parentDepth: number,
   crawlId: number,
   pageId: number,
   adId: number) {
   // log.info(`${page.url()}: Clicking ad`)
   return new Promise<void>((resolve, reject) => {
-    let ctPage: puppeteer.Page | undefined;
+    let ctPage: Page | undefined;
 
     // Create timeout for processing overall clickthrough. If it takes longer
     // than this, abort handling this ad.

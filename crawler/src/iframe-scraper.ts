@@ -1,5 +1,5 @@
-import puppeteer from 'puppeteer';
-import {ExternalDomains, extractExternalDomains} from './domain-extractor.js';
+import { ElementHandle, Frame } from 'puppeteer';
+import {ExternalDomains, extractExternalDomains} from './domain-extractor';
 
 /**
  * This interface contains the scraped data and metadata from an iframe. Because
@@ -20,7 +20,7 @@ export interface ScrapedIFrame {
  * @returns A promise containing one or more ScrapedIFrames. Each ScrapedIFrame
  * may contain sub-ScrapedIFrames.
  */
-export async function scrapeIFramesInElement(ad: puppeteer.ElementHandle) {
+export async function scrapeIFramesInElement(ad: ElementHandle) {
   let iframes = await ad.$$('iframe');
   let scrapedIFrames: Array<ScrapedIFrame> = [];
   for (let iframe of iframes) {
@@ -41,7 +41,7 @@ export async function scrapeIFramesInElement(ad: puppeteer.ElementHandle) {
  * @returns A promise containing the ScrapedIFrame, which will contain
  * the ScrapedIFrames of any sub-iframes.
  */
-export async function scrape(iframe: puppeteer.Frame): Promise<ScrapedIFrame> {
+export async function scrape(iframe: Frame): Promise<ScrapedIFrame> {
   try {
     let ts = new Date();
     // WORKAROUND: await iframe.content() hangs indefinitely for some reason on

@@ -1,7 +1,7 @@
 import { Client } from 'pg';
-import { ScrapedIFrame } from './iframe-scraper.js';
-import * as log from './log.js';
-import { ExternalDomains } from './domain-extractor.js';
+import { ScrapedIFrame } from './iframe-scraper';
+import * as log from './log';
+import { ExternalDomains } from './domain-extractor';
 
 export interface dbInsertOptions {
   table: string,

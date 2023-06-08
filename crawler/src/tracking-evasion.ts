@@ -1,12 +1,12 @@
-import * as log from './log.js';
-import puppeteer from 'puppeteer';
+import * as log from './log';
+import { Browser, Page, Target } from 'puppeteer';
 
 
 // Evade platform-based targeting/screening by spoofing the user agent to
 // imitate a windows based machine.
-export async function spoofUserAgent(browser: puppeteer.Browser) {
+export async function spoofUserAgent(browser: Browser) {
   const version = await browser.version();
-  browser.on('targetcreated', (target: puppeteer.Target) => {
+  browser.on('targetcreated', (target: Target) => {
     if (target.type() !== 'page') {
       return;
     }
@@ -20,7 +20,7 @@ export async function spoofUserAgent(browser: puppeteer.Browser) {
 }
 
 // Evade checks for headless Chrome. Must run with every new page before navigating.
-export async function evadeHeadlessChromeDetection(page: puppeteer.Page) {
+export async function evadeHeadlessChromeDetection(page: Page) {
   return page.evaluateOnNewDocument(() => {
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined,
@@ -54,7 +54,7 @@ export async function evadeHeadlessChromeDetection(page: puppeteer.Page) {
  * @param disableThirdPartyCookies Disable 3rd party cookies
  */
 export async function disableCookies(
-    browser: puppeteer.Browser,
+    browser: Browser,
     disableAllCookies: boolean,
     disableThirdPartyCookies: boolean) {
   if (!disableAllCookies && !disableThirdPartyCookies) {
@@ -100,7 +100,7 @@ export async function disableCookies(
           .shadowRoot.querySelector("#advancedPage > settings-section.expanded > settings-privacy-page")
           .shadowRoot.querySelector("#pages > settings-subpage > settings-toggle-button");
     });
-    browser.on('targetcreated', (target: puppeteer.Target) => {
+    browser.on('targetcreated', (target: Target) => {
       if (target.type() !== 'page') {
         return;
       }

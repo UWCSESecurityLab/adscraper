@@ -1,5 +1,5 @@
-import puppeteer from 'puppeteer';
-import * as log from './log.js';
+import { ElementHandle, Page } from 'puppeteer';
+import * as log from './log';
 
 // These functions are used to instrument a page to monitor DOM mutations.
 // - |injectDOMListener| should be injected into the page context on load, and
@@ -9,7 +9,7 @@ import * as log from './log.js';
 // - |matchDOMUpdateToAd| matches mutation events to a list of provided known
 //   ads.
 
-const pageToHandleToDOMMutatorUrls = new Map<puppeteer.Page, Map<puppeteer.ElementHandle, Set<string>>>();
+const pageToHandleToDOMMutatorUrls = new Map<Page, Map<ElementHandle, Set<string>>>();
 
 /**
 * Injects MutationEvent listeners into the page to detect DOM changes
@@ -17,7 +17,7 @@ const pageToHandleToDOMMutatorUrls = new Map<puppeteer.Page, Map<puppeteer.Eleme
 * context by exposing the trackDOMUpdate function to the page.
 * @param page Page to listen for DOM changes in.
 */
-export async function injectDOMListener(page: puppeteer.Page) {
+export async function injectDOMListener(page: Page) {
   log.info(`${page.url()}: Injecting DOM listeners`);
   await page.exposeFunction('sendToPuppeteer', (data: any) => {
     trackDOMUpdate(page, data);
@@ -86,7 +86,7 @@ export async function injectDOMListener(page: puppeteer.Page) {
  * @param data.stack     Stack trace of the mutation event
  */
 export async function trackDOMUpdate(
-  page: puppeteer.Page,
+  page: Page,
   data: { eventType: string, elementId: string, stack: string }) {
   try {
     const handle = await page.$(`[mutatedelement="${data.elementId}"]`);
@@ -125,7 +125,7 @@ export async function trackDOMUpdate(
     // Look up this page's DOM update map
     let handleToURLs = pageToHandleToDOMMutatorUrls.get(page);
     if (!handleToURLs) {
-      handleToURLs = new Map<puppeteer.ElementHandle, Set<string>>();
+      handleToURLs = new Map<ElementHandle, Set<string>>();
       pageToHandleToDOMMutatorUrls.set(page, handleToURLs);
     }
     // Store elementHandle->URLs mapping, merge with existing URLs if they exist
@@ -147,9 +147,9 @@ export async function trackDOMUpdate(
  * @param adHandleToAdId Handles to ads
  */
 export async function matchDOMUpdateToAd(
-  page: puppeteer.Page,
-  adHandleToAdId: Map<puppeteer.ElementHandle, number>) {
-  const adHandleToDOMMutatorUrls = new Map<puppeteer.ElementHandle, Set<string>>();
+  page: Page,
+  adHandleToAdId: Map<ElementHandle, number>) {
+  const adHandleToDOMMutatorUrls = new Map<ElementHandle, Set<string>>();
   const handleToDOMMutatorUrls = pageToHandleToDOMMutatorUrls.get(page);
   if (!handleToDOMMutatorUrls) {
     return [];

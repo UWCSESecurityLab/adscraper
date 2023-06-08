@@ -1,5 +1,4 @@
 import fs from 'fs';
-import fetch from 'node-fetch';
 
 fetch('https://raw.githubusercontent.com/easylist/easylist/master/easylist/easylist_general_hide.txt').then(res => {
   if (!res.ok) {

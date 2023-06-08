@@ -1,6 +1,6 @@
-import puppeteer from 'puppeteer';
+import { Page } from 'puppeteer';
 import rssParser from 'rss-parser';
-import * as log from './log.js';
+import * as log from './log';
 
 /**
  * Attempts to find an article page from a website by finding an RSS feed.
@@ -9,7 +9,7 @@ import * as log from './log.js';
  * @param page Page to get an RSS feed from
  * @returns URL of the article if found, undefined if not found
  */
-export default async function getArticleFromRSS(page: puppeteer.Page) {
+export default async function getArticleFromRSS(page: Page) {
   let articleUrl = await getFromHeader(page);
   if (articleUrl) {
     return articleUrl;
@@ -17,7 +17,7 @@ export default async function getArticleFromRSS(page: puppeteer.Page) {
   return guessRssFeed(page);
 }
 
-async function getFromHeader(page: puppeteer.Page) {
+async function getFromHeader(page: Page) {
   log.info(`${page.url()}: Attempting to get RSS feed from header`);
   let rssUrls = await page.evaluate(() => {
     let rss: string[] = [];
@@ -53,7 +53,7 @@ async function getFromHeader(page: puppeteer.Page) {
   log.info(`${page.url()}: None of the feeds were valid or had articles`);
 }
 
-async function guessRssFeed(page: puppeteer.Page) {
+async function guessRssFeed(page: Page) {
   log.info(`${page.url()}: Attempting to guess RSS feeds`);
   const parser = new rssParser();
   const guessPaths = ['/feed', '/feeds', '/rss'];
