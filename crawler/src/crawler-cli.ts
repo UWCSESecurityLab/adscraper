@@ -1,11 +1,11 @@
 import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 import fs from 'fs';
-import { Client } from 'pg';
-import sourceMapSupport from 'source-map-support';
 import os from 'os';
-import * as crawler from './crawler';
-import * as log from './log';
+import pg from 'pg';
+import sourceMapSupport from 'source-map-support';
+import * as crawler from './crawler.js';
+import * as log from './log.js';
 sourceMapSupport.install();
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
@@ -231,7 +231,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 
 (async function() {
   // Initialize Postgres client
-  let postgres = new Client(pgConf);
+  let postgres = new pg.Client(pgConf);
   await postgres.connect();
   log.info('Postgres driver initialized');
 

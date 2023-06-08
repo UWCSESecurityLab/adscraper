@@ -1,5 +1,5 @@
 import { ElementHandle, JSHandle, Page } from 'puppeteer';
-import easylist from './easylist_selectors.json';
+import easylist from './easylist_selectors.json' assert { type: "json" };
 
 const combinedSelectors = easylist.concat([
   '.ob-widget',

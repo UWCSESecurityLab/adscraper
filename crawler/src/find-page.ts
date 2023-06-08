@@ -1,8 +1,7 @@
 import { Page } from 'puppeteer';
-import * as log from './log';
-import getArticleFromRSS from './get-rss-article';
-import * as adDetection from './ad-detection';
-import fs from 'fs';
+import * as adDetection from './ad-detection.js';
+import getArticleFromRSS from './get-rss-article.js';
+import * as log from './log.js';
 
 /**
  * Randomly picks links from a page, opens them in a new tab, and checks if it

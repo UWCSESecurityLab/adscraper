@@ -1,5 +1,5 @@
 import { ElementHandle, Frame } from 'puppeteer';
-import {ExternalDomains, extractExternalDomains} from './domain-extractor';
+import {ExternalDomains, extractExternalDomains} from './domain-extractor.js';
 
 /**
  * This interface contains the scraped data and metadata from an iframe. Because

@@ -1,7 +1,7 @@
 import path from 'path';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
-import * as log from './log';
+import * as log from './log.js';
 import { BoundingBox, ElementHandle, Page } from 'puppeteer';
 
 export interface AdHandles {

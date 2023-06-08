@@ -1,6 +1,6 @@
 import puppeteer, { Browser } from 'puppeteer';
 import { Client } from 'pg';
-import DbClient from './db';
+import DbClient from './db.js';
 
 let db: DbClient, postgres: Client, browser: Browser;
 

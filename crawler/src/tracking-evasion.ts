@@ -1,5 +1,5 @@
-import * as log from './log';
 import { Browser, Page, Target } from 'puppeteer';
+import * as log from './log.js';
 
 
 // Evade platform-based targeting/screening by spoofing the user agent to
