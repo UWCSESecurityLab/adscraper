@@ -25,6 +25,10 @@ The schema and related documentation of data formats can be found in
 psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
+<b>Note</b>: You will run into an error if you do not create the database on Postgres App before running the above command. To fix the error, run this slightly modified command (the instructions about ports still apply) and the script will automatically create the database for you:
+
+```psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql```
+
 ## Setup (for Docker-based crawls)
 To run `crawl-coordinator`, you must set up your Postgres database in Docker,
 so that the Docker-based crawl workers can connect to the database.
