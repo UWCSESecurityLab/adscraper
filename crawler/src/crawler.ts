@@ -35,6 +35,7 @@ export interface CrawlerFlags {
   externalScreenshotDir?: string,
   skipCrawlingSeedUrl: boolean,
   warmingCrawl: boolean,
+  userDataDir?: string,
   updateCrawlerIpField: boolean
 };
 
@@ -462,7 +463,8 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
   browser = await puppeteer.launch({
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
-    headless: 'new'
+    headless: 'new',
+    userDataDir: flags.userDataDir
   });
   const version = await browser.version();
 

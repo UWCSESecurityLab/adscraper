@@ -158,6 +158,11 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'options'
   },
   {
+    name: 'user_data_dir',
+    type: String,
+    description: 'Directory of the Chromium profile to use for this crawl. If not provided (for stateless crawls), uses a new, empty profile.'
+  },
+  {
     name: 'update_crawler_ip_field',
     type: Boolean,
     description: 'Update the crawler_ip field in the job table (use this flag on the first crawler when performing a crawl using the dockerized VPN).',
@@ -253,6 +258,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       externalScreenshotDir: options.external_screenshot_dir as string | undefined,
       skipCrawlingSeedUrl: options.skip_crawling_seed_url ? true : false,
       warmingCrawl: options.warming_crawl ? true : false,
+      userDataDir: options.user_data_dir,
       updateCrawlerIpField: options.update_crawler_ip_field as boolean
     }, postgres);
     await postgres.end();
