@@ -22,6 +22,7 @@ export interface CrawlerFlags {
   clearCookiesBeforeCT: boolean,
   crawlArticle: boolean,
   crawlerHostname: string,
+  crawlList: string,
   crawlPageWithAds: boolean,
   dataset: string,
   disableAllCookies: boolean,
@@ -33,7 +34,6 @@ export interface CrawlerFlags {
   screenshotDir: string,
   externalScreenshotDir?: string,
   skipCrawlingSeedUrl: boolean,
-  url: string,
   warmingCrawl: boolean,
   updateCrawlerIpField: boolean
 };
@@ -247,7 +247,7 @@ async function crawlPage(page: Page, metadata: CrawlPageMetadata): Promise<void>
               chumboxId: chumboxId,
               platform: platform
             });
-            log.info(`${flags.url}: Ad archived, saved under id=${adId}`);
+            log.info(`${page.url()}: Ad archived, saved under id=${adId}`);
             adHandleToAdId.set(ad, adId);
 
             if (metadata.currentDepth + 2 >= 2 * flags.maxPageCrawlDepth) {
@@ -432,6 +432,23 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
     process.exit(1);
   }
 
+  // Read and validate crawl list
+  if (!fs.existsSync(flags.crawlList)) {
+    console.log(`${flags.crawlList} does not exist.`);
+    process.exit(1);
+  }
+
+  const urls = fs.readFileSync(flags.crawlList).toString().trimEnd().split('\n');
+  let i = 1;
+  for (let url of urls) {
+    try {
+      new URL(url);
+    } catch (e) {
+      console.log(`Invalid URL in ${flags.crawlList}, line ${i}: ${url}`);
+      process.exit(1);
+    }
+  }
+
   if (flags.updateCrawlerIpField) {
     await setCrawlerIpField(flags.jobId, postgres);
   }
@@ -445,7 +462,7 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
   browser = await puppeteer.launch({
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
-    headless: true
+    headless: 'new'
   });
   const version = await browser.version();
 
@@ -456,104 +473,113 @@ export async function crawl(flags: CrawlerFlags, postgres: Client) {
   await trackingEvasion.disableCookies(
     browser, flags.disableAllCookies, flags.disableThirdPartyCookies);
 
-  // Insert record for this crawl
-  try {
-    let crawlId: number;
-    if (!flags.skipCrawlingSeedUrl) {
-      crawlId = await db.insert({
-        table: 'crawl',
-        returning: 'id',
-        data: {
-          timestamp: new Date(),
-          job_id: flags.jobId,
-          dataset: flags.dataset,
-          label: flags.label,
-          seed_url: flags.url,
-          warming_crawl: flags.warmingCrawl
+  for (let url of urls) {
+    // Set up timeout for this URL
+    let [urlTimeout, urlTimeoutId] = createAsyncTimeout<number>(
+      `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
+
+    let seedPage = await browser.newPage();
+
+    try {
+      let _crawl = (async () => {
+        // Insert record for this crawl
+        try {
+          let crawlId: number;
+          if (!flags.skipCrawlingSeedUrl) {
+            crawlId = await db.insert({
+              table: 'crawl',
+              returning: 'id',
+              data: {
+                timestamp: new Date(),
+                job_id: flags.jobId,
+                dataset: flags.dataset,
+                label: flags.label,
+                seed_url: url,
+                warming_crawl: flags.warmingCrawl
+              }
+            }) as number;
+          } else {
+            let crawlQuery = await postgres.query(`SELECT id FROM crawl WHERE job_id=$1 AND seed_url=$2 AND warming_crawl='f'`,
+              [flags.jobId, url]);
+            crawlId = crawlQuery.rows[0].id as number;
+          }
+
+          // Open the seed page
+          log.info(`${url}: loading page`);
+
+          if (!flags.skipCrawlingSeedUrl && !flags.warmingCrawl) {
+            await domMonitor.injectDOMListener(seedPage);
+          }
+
+          await trackingEvasion.evadeHeadlessChromeDetection(seedPage);
+
+          await seedPage.goto(url, { timeout: 60000 });
+
+          // Crawl the page
+          if (!flags.skipCrawlingSeedUrl) {
+            await crawlPage(seedPage, {
+              pageType: PageType.HOME,
+              currentDepth: 1,
+              crawlId: crawlId
+            });
+          }
+
+          if (!flags.warmingCrawl && flags.crawlArticle) {
+            // Find and crawl an article on the page
+            log.info(`${url}: Searching for article`);
+            const article = await findArticle(seedPage);
+            if (article) {
+              log.info(`${url}: Successfully fetched article ${article}`);
+              log.info(`${article}: loading page`);
+              const articlePage = await browser.newPage();
+              await trackingEvasion.evadeHeadlessChromeDetection(articlePage);
+              await domMonitor.injectDOMListener(articlePage);
+              await articlePage.goto(article, { timeout: 60000 });
+              await crawlPage(articlePage, {
+                pageType: PageType.ARTICLE,
+                currentDepth: 1,
+                crawlId: crawlId
+              });
+              await articlePage.close();
+            } else {
+              log.strError(`${url}: Couldn't find article`);
+            }
+          } else if (!flags.warmingCrawl && flags.crawlPageWithAds) {
+            log.info(`${url}: Searching for page with ads`);
+            const article = await findPageWithAds(seedPage);
+            if (article) {
+              log.info(`${url}: Successfully found page with ads ${article}`);
+              log.info(`${article}: loading page`);
+              const adsPage = await browser.newPage();
+              await trackingEvasion.evadeHeadlessChromeDetection(adsPage);
+              await domMonitor.injectDOMListener(adsPage);
+              await adsPage.goto(article, { timeout: 60000 });
+              await crawlPage(adsPage, {
+                pageType: PageType.SUBPAGE,
+                currentDepth: 1,
+                crawlId: crawlId
+              });
+              await adsPage.close();
+            } else {
+              log.strError(`${url}: Couldn't find article`);
+            }
+          }
+        } catch (e: any) {
+          log.error(e);
+          throw e;
+        } finally {
+          clearTimeout(urlTimeoutId);
         }
-      }) as number;
-    } else {
-      let crawlQuery = await postgres.query(`SELECT id FROM crawl WHERE job_id=$1 AND seed_url=$2 AND warming_crawl='f'`,
-        [flags.jobId, flags.url]);
-      crawlId = crawlQuery.rows[0].id as number;
+      })();
+      await Promise.race([_crawl, urlTimeout]);
+      await seedPage.close();
+    } catch (e) {
+      await seedPage.close();
+      continue;
     }
-
-    // Open the seed page
-    log.info(`${flags.url}: loading page`);
-    let seedPage = (await browser.pages())[0];
-    if (!flags.skipCrawlingSeedUrl && !flags.warmingCrawl) {
-      await domMonitor.injectDOMListener(seedPage);
-    }
-
-    await trackingEvasion.evadeHeadlessChromeDetection(seedPage);
-
-    await seedPage.goto(flags.url, { timeout: 60000 });
-
-    // Set up timeout to kill the crawler if it stalls
-    setTimeout(async () => {
-      log.strError(`Crawler instance timed out: ${OVERALL_TIMEOUT}ms`)
-      await browser.close();
-      process.exit(1);
-    }, OVERALL_TIMEOUT);
-
-    // Crawl the page
-    if (!flags.skipCrawlingSeedUrl) {
-      await crawlPage(seedPage, {
-        pageType: PageType.HOME,
-        currentDepth: 1,
-        crawlId: crawlId
-      });
-    }
-
-    if (!flags.warmingCrawl && flags.crawlArticle) {
-      // Find and crawl an article on the page
-      log.info(`${flags.url}: Searching for article`);
-      const article = await findArticle(seedPage);
-      if (article) {
-        log.info(`${flags.url}: Successfully fetched article ${article}`);
-        log.info(`${article}: loading page`);
-        const articlePage = await browser.newPage();
-        await trackingEvasion.evadeHeadlessChromeDetection(articlePage);
-        await domMonitor.injectDOMListener(articlePage);
-        await articlePage.goto(article, { timeout: 60000 });
-        await crawlPage(articlePage, {
-          pageType: PageType.ARTICLE,
-          currentDepth: 1,
-          crawlId: crawlId
-        });
-        await articlePage.close();
-      } else {
-        log.strError(`${flags.url}: Couldn't find article`);
-      }
-    } else if (!flags.warmingCrawl && flags.crawlPageWithAds) {
-      log.info(`${flags.url}: Searching for page with ads`);
-      const article = await findPageWithAds(seedPage);
-      if (article) {
-        log.info(`${flags.url}: Successfully found page with ads ${article}`);
-        log.info(`${article}: loading page`);
-        const adsPage = await browser.newPage();
-        await trackingEvasion.evadeHeadlessChromeDetection(adsPage);
-        await domMonitor.injectDOMListener(adsPage);
-        await adsPage.goto(article, { timeout: 60000 });
-        await crawlPage(adsPage, {
-          pageType: PageType.SUBPAGE,
-          currentDepth: 1,
-          crawlId: crawlId
-        });
-        await adsPage.close();
-      } else {
-        log.strError(`${flags.url}: Couldn't find article`);
-      }
-    }
-
-    await seedPage.close();
-    await browser.close();
-    log.info('Crawl job completed');
-  } catch (e: any) {
-    log.error(e);
-    await browser.close();
-    throw e;
   }
+  await browser.close();
+  log.info('Crawler instance completed');
 }
 
 async function setCrawlerIpField(jobId: number, postgres: Client) {

@@ -31,9 +31,9 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'url',
+    name: 'crawl_list',
     type: String,
-    description: 'The target URL to crawl.',
+    description: 'A file containing URLs to crawl, one URL per line',
     group: 'main'
   },
   {
@@ -193,8 +193,8 @@ if (options.help) {
   console.log(commandLineUsage(usage));
   process.exit(0);
 }
-if (!options.url) {
-  console.log('Missing required parameter: --url');
+if (!options.crawl_list) {
+  console.log('Missing required parameter: --crawl_list');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
@@ -240,6 +240,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
       crawlArticle: options.crawl_article ? true : false,
       crawlerHostname: options.crawler_hostname,
+      crawlList: options.crawl_list as string,
       crawlPageWithAds: options.crawl_page_with_ads ? true : false,
       dataset: options.dataset ? options.dataset : 'test',
       disableAllCookies: options.disable_all_cookies ? true : false,
@@ -251,7 +252,6 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       screenshotDir: options.screenshot_dir as string,
       externalScreenshotDir: options.external_screenshot_dir as string | undefined,
       skipCrawlingSeedUrl: options.skip_crawling_seed_url ? true : false,
-      url: options.url as string,
       warmingCrawl: options.warming_crawl ? true : false,
       updateCrawlerIpField: options.update_crawler_ip_field as boolean
     }, postgres);
