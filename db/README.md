@@ -22,7 +22,7 @@ The schema and related documentation of data formats can be found in
 #     "-h localhost"
 # If you use a custom port (default is 5432), add the option
 #     "-p <YOUR_POSTGRES_PORT>"
-psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
+psql -d adscraper -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
 <b>Note</b>: You will run into an error if you do not create the database on Postgres App before running the above command. To fix the error, run this slightly modified command (the instructions about ports still apply) and the script will automatically create the database for you:
