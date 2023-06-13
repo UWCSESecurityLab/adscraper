@@ -1,6 +1,5 @@
 import { ElementHandle, Page } from "puppeteer";
 import * as log from '../util/log.js';
-import { evadeHeadlessChromeDetection } from "../tracking-evasion.js";
 import { injectDOMListener } from "./dom-monitor.js";
 import { PageType, scrapePage } from "../pages/page-scraper.js";
 
@@ -66,7 +65,6 @@ export function clickAd(
         req.abort('aborted');
         clearTimeout(adClickTimeout);
         let newPage = await BROWSER.newPage();
-        await evadeHeadlessChromeDetection(newPage);
         try {
           ctPage = newPage;
           if (!FLAGS.warmingCrawl) {
@@ -96,7 +94,6 @@ export function clickAd(
     });
 
     page.on('popup', (newPage) => {
-      evadeHeadlessChromeDetection(newPage);
       // If the ad click opened a new tab/popup, start crawling in the new tab.
       ctPage = newPage;
       log.info(`${newPage.url()}: opened in popup`);

@@ -6,7 +6,6 @@ import sourceMapSupport from 'source-map-support';
 import * as domMonitor from './ads/dom-monitor.js';
 import { findArticle, findPageWithAds } from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
-import * as trackingEvasion from './tracking-evasion.js';
 import DbClient from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout } from './util/timeout.js';
@@ -21,8 +20,6 @@ export interface CrawlerFlags {
   crawlList: string,
   crawlPageWithAds: boolean,
   dataset: string,
-  disableAllCookies: boolean,
-  disableThirdPartyCookies: boolean,
   headless: boolean | 'new',
   jobId: number,
   label?: string,
@@ -117,11 +114,6 @@ export async function crawl(flags: CrawlerFlags) {
 
   log.info('Running ' + version);
 
-  // Set up tracking/targeting evasion
-  await trackingEvasion.spoofUserAgent(BROWSER);
-  await trackingEvasion.disableCookies(
-    BROWSER, FLAGS.disableAllCookies, FLAGS.disableThirdPartyCookies);
-
   // Main loop through crawl list
   for (let url of urls) {
     // Set overall timeout for this crawl list item
@@ -159,7 +151,6 @@ export async function crawl(flags: CrawlerFlags) {
           if (!FLAGS.skipCrawlingSeedUrl && !FLAGS.warmingCrawl) {
             await domMonitor.injectDOMListener(seedPage);
           }
-          await trackingEvasion.evadeHeadlessChromeDetection(seedPage);
           await seedPage.goto(url, { timeout: 60000 });
 
           // Crawl the page
@@ -185,7 +176,6 @@ export async function crawl(flags: CrawlerFlags) {
             if (article) {
               log.info(`${article}: loading page`);
               const articlePage = await BROWSER.newPage();
-              await trackingEvasion.evadeHeadlessChromeDetection(articlePage);
               await domMonitor.injectDOMListener(articlePage);
               await articlePage.goto(article, { timeout: 60000 });
               const pageId = await scrapePage(articlePage, {
@@ -207,7 +197,6 @@ export async function crawl(flags: CrawlerFlags) {
             if (urlWithAds) {
               log.info(`${urlWithAds}: loading page`);
               const adsPage = await BROWSER.newPage();
-              await trackingEvasion.evadeHeadlessChromeDetection(adsPage);
               await domMonitor.injectDOMListener(adsPage);
               await adsPage.goto(urlWithAds, { timeout: 60000 });
               const pageId = await scrapePage(adsPage, {

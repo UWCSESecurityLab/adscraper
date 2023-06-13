@@ -242,8 +242,6 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       crawlList: options.crawl_list as string,
       crawlPageWithAds: options.crawl_page_with_ads ? true : false,
       dataset: options.dataset ? options.dataset : 'test',
-      disableAllCookies: options.disable_all_cookies ? true : false,
-      disableThirdPartyCookies: options.disable_third_party_cookies ? true : false,
       headless: (typeof options.headless == 'boolean') || options.headless == 'new' ? options.headless : 'new',
       jobId: options.job_id as number,
       label: options.label,
