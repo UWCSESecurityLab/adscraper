@@ -22,70 +22,92 @@ export function clickAd(
   pageId: number,
   adId: number) {
   // log.info(`${page.url()}: Clicking ad`)
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<void>(async (resolve, reject) => {
     let ctPage: Page | undefined;
 
-    // Create timeout for processing overall clickthrough. If it takes longer
-    // than this, abort handling this ad.
+    // Create timeout for processing overall clickthrough (including the landing page).
+    // If it takes longer than this, abort handling this ad.
     const timeout = setTimeout(() => {
       if (ctPage) {
         ctPage.close();
       }
-      reject(new Error(`${page.url()}: Clickthrough timed out - ${CLICKTHROUGH_TIMEOUT}ms`));
       page.removeAllListeners();
+      reject(new Error(`${page.url()}: Clickthrough timed out - ${CLICKTHROUGH_TIMEOUT}ms`));
     }, CLICKTHROUGH_TIMEOUT);
 
-    // Wait for the puppeteer click, and if the puppeteer click failed for some
-    // reason, manually click in the middle of the ad's bounding box.
-    const adClickTimeout = setTimeout(async () => {
-      const bounds = await ad.boundingBox();
-      log.info(`${page.url()}: Puppeteer click failed on ad ${adId}, attempting manual click in middle of ad`);
-      if (!bounds) {
-        reject(new Error(`${page.url()}: Ad ${adId} does not have a valid bounding box`));
-        page.removeAllListeners();
-        return;
-      }
-      log.info(`${page.url()}: Ad ${adId} has size ${bounds.width}x${bounds.height},
-          positioned at ${bounds.x},${bounds.y}.
-          Manually clicking at ${bounds.x + bounds.width / 2},${bounds.y + bounds.height / 2}.`);
-      await page.mouse.click(
-        bounds.x + bounds.width / 2,
-        bounds.y + bounds.height / 2,
-        { delay: 10 }
-      );
-    }, AD_CLICK_TIMEOUT);
+    // Create timeout for the click. If the click fails to do anything,
+    // abort handing this ad.
+    const clickTimeout = setTimeout(() => {
+      page.removeAllListeners();
+      reject(new Error(`${page.url()}: Ad click timed out - ${AD_CLICK_TIMEOUT}ms`));
+    }, AD_CLICK_TIMEOUT)
 
-    // First, set up event handlers to catch the page created when the ad is
-    // clicked.
+    // Before clicking, set up various event listeners to catch what happens
+    // when the ad is clicked.
+
+    // First, turn on request interception to enable catching popups and
+    // navigations.
+    await page.setRequestInterception(true);
+
+    // Set up a Chrome DevTools session (used later for popup interception)
+    const cdp = await BROWSER.target().createCDPSession();
+
+    // Create a function to clean up everything we're about to add
+    async function cleanUp() {
+      await cdp.send('Target.setAutoAttach', {
+        waitForDebuggerOnStart: false,
+        autoAttach: false,
+        flatten: true
+      });
+      page.removeAllListeners();
+      await page.setRequestInterception(false);
+    }
+
+    // This listener handles the case where the ad tries to navigate the
+    // current tab to the ad's landing page. If this happens,
+    // block the navigation, and then decide what to do based on what
+    // the crawl job config says.
     page.on('request', async (req) => {
-      // If the click tries to navigate the page instead of opening it in a
-      // new tab, block it and manually open it in a new tab.
-      if (req.isNavigationRequest() && req.frame() === page.mainFrame() && req.url() !== page.url()) {
-        log.info(`Blocked attempted navigation to ${req.url()}, opening manually`);
+      // Block navigation requests only if they are in in the top level frame
+      // (iframes can also trigger this event).
+      if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+        // Stop the navigation from happening.
         req.abort('aborted');
-        clearTimeout(adClickTimeout);
-        let newPage = await BROWSER.newPage();
-        try {
-          ctPage = newPage;
-          if (!FLAGS.warmingCrawl) {
-            await injectDOMListener(newPage)
-          }
-          await newPage.goto(req.url(), { referer: req.headers().referer });
-          log.info(`${newPage.url()}: manually opened in new tab`);
-          await scrapePage(newPage, {
-            pageType: PageType.LANDING,
-            currentDepth: parentDepth + 2,
-            crawlId: crawlId,
-            referrerPage: pageId,
-            referrerAd: adId
-          });
-          clearTimeout(timeout);
+        clearTimeout(clickTimeout);
+
+        if (FLAGS.clickAds == 'clickAndBlockLoad') {
+          // Store the request URL and continue.
+          // TODO: store the URL somewhere
+          console.log('Intercepted and blocked ad (navigation):', req.url());
+          await cleanUp();
           resolve();
-        } catch (e) {
-          reject(e);
-        } finally {
-          await newPage.close();
-          page.removeAllListeners();
+          return;
+        } else if (FLAGS.clickAds == 'clickAndScrapeLandingPage') {
+          // Open the blocked URL in a new tab, so that we can keep the previous
+          // one open.
+          log.info(`Blocked attempted navigation to ${req.url()}, opening in a new tab`);
+          let newPage = await BROWSER.newPage();
+          try {
+            ctPage = newPage;
+            if (!FLAGS.warmingCrawl) {
+              await injectDOMListener(newPage)
+            }
+            await newPage.goto(req.url(), { referer: req.headers().referer });
+            await scrapePage(newPage, {
+              pageType: PageType.LANDING,
+              currentDepth: parentDepth + 2,
+              crawlId: crawlId,
+              referrerPage: pageId,
+              referrerAd: adId
+            });
+            clearTimeout(timeout);
+            resolve();
+          } catch (e) {
+            reject(e);
+          } finally {
+            await newPage.close();
+            await cleanUp();
+          }
         }
       } else {
         // Allow other unrelated requests through
@@ -93,48 +115,97 @@ export function clickAd(
       }
     });
 
-    page.on('popup', (newPage) => {
-      // If the ad click opened a new tab/popup, start crawling in the new tab.
-      ctPage = newPage;
-      log.info(`${newPage.url()}: opened in popup`);
-      if (!FLAGS.warmingCrawl) {
-        injectDOMListener(newPage);
-      }
-      clearTimeout(adClickTimeout);
-      newPage.on('load', async () => {
-        try {
-          await scrapePage(newPage, {
-            pageType: PageType.LANDING,
-            currentDepth: parentDepth + 2,
-            crawlId: crawlId,
-            referrerPage: pageId,
-            referrerAd: adId
-          });
-          clearTimeout(timeout);
-          resolve();
-        } catch (e) {
-          reject(e);
-        } finally {
-          await newPage.close();
-          page.removeAllListeners();
-        }
+    // Next, handle the case where the ad opens a popup. We have two methods
+    // for handling this, depending on the desired click behavior.
+
+    // If we want to block the popup from loading, we need to use the
+    // the Chrome DevTools protocol to auto-attach to the popup when it opens,
+    // and intercept the request.
+    if (FLAGS.clickAds == 'clickAndBlockLoad') {
+      // Enable auto-attaching the devtools debugger to new targets (i.e. popups)
+      await cdp.send('Target.setAutoAttach', {
+        waitForDebuggerOnStart: true,
+        autoAttach: true,
+        flatten: true,
+        filter: [
+          { type: 'page', exclude: false },
+        ]
       });
-    });
 
-    // Take care of a few things before clicking on the ad:
-    (async function () {
-      if (FLAGS.clearCookiesBeforeCT) {
-        // Clear all cookies to minimize tracking from prior clickthroughs.
-        const cdp = await page.target().createCDPSession();
-        await cdp.send('Network.clearBrowserCookies')
-      }
-      // Intercept requests to catch popups and navigations.
-      await page.setRequestInterception(true)
-      // Finally click the ad
-      log.info(`${page.url()}: Clicking on ad ${adId}`);
+      cdp.on('Target.attachedToTarget', async ({ sessionId, targetInfo }) => {
+        clearTimeout(clickTimeout);
 
-      // Attempt to use the built-in puppeteer click.
-      await ad.click({ delay: 10 });
-    })();
+        // Get the CDP session corresponding to the popup
+        let connection = cdp.connection();
+        if (!connection) {
+          reject(new Error('Could not get puppeteer\'s CDP connection'));
+          await cleanUp();
+          return;
+        }
+        let popupCdp = connection.session(sessionId);
+        if (!popupCdp) {
+          reject(new Error('Could not get CDP session of caught popup'));
+          await cleanUp();
+          return;
+        }
+
+        // Enable request interception in the popup
+        await popupCdp.send('Fetch.enable');
+
+        // Set up a listener to catch and block the initial navigation request
+        popupCdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
+          // TODO: save this URL somewhere
+          console.log('Intercepted and blocked ad (popup):', request.url);
+          // Prevent navigation from running
+          await popupCdp?.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' });
+          // Close the tab (we don't have a puppeteer-land handle to the page)
+          await popupCdp?.send('Target.closeTarget', { targetId: targetInfo.targetId });
+
+          // Success, clean up the listeners
+          await cleanUp();
+          resolve();
+        });
+
+        // Allow the popup to continue executing and make the navigation request
+        await popupCdp.send('Runtime.runIfWaitingForDebugger');
+      });
+
+    // If we want to allow the popup to load, we can listen for the popup
+    // event in puppeteer and use that page.
+    } else if (FLAGS.clickAds == 'clickAndScrapeLandingPage') {
+      page.on('popup', (newPage) => {
+        clearTimeout(clickTimeout);
+
+        // If the ad click opened a new tab/popup, start crawling in the new tab.
+        ctPage = newPage;
+        log.info(`${newPage.url()}: opened in popup`);
+        injectDOMListener(newPage);
+        newPage.on('load', async () => {
+          try {
+            await scrapePage(newPage, {
+              pageType: PageType.LANDING,
+              currentDepth: parentDepth + 2,
+              crawlId: crawlId,
+              referrerPage: pageId,
+              referrerAd: adId
+            });
+            clearTimeout(timeout);
+            resolve();
+          } catch (e) {
+            reject(e);
+          } finally {
+            await newPage.close();
+            await cleanUp();
+          }
+        });
+      });
+    }
+
+
+    // Finally click the ad
+    log.info(`${page.url()}: Clicking on ad ${adId}`);
+
+    // Attempt to use the built-in puppeteer click.
+    await ad.click({ delay: 10 });
   });
 }

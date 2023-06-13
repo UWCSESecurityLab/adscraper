@@ -106,6 +106,18 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
+    name: 'headless',
+    type: String,
+    description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "new".',
+    group: 'options',
+  },
+  {
+    name: 'click_ads',
+    type: String,
+    description: 'Whether to click ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage.',
+    group: 'options'
+  },
+  {
     name: 'crawl_article',
     alias: 'a',
     type: Boolean,
@@ -212,6 +224,22 @@ if (!options.screenshot_dir) {
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
+if (options.click_ads !== 'noClick' && options.click_ads !== 'clickAndBlockLoad' && options.click_ads !== 'clickAndScrapeLandingPage') {
+  console.log('--clickAds must be one of "noClick", "clickAndBlockLoad", or "clickAndScrapeLandingPage"');
+  process.exit(1);
+}
+
+let headless: boolean | 'new';
+if (options.headless == 'true') {
+  headless = true;
+} else if (options.headless == 'false') {
+  headless = false;
+} else if (options.headless == 'new') {
+  headless = 'new';
+} else {
+  console.log('--headless must be "true", "false", or "new"');
+  process.exit(1);
+}
 
 let pgConf: {
   host: string,
@@ -237,12 +265,13 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
   try {
     await crawler.crawl({
       clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
+      clickAds: options.click_ads,
       crawlArticle: options.crawl_article ? true : false,
       crawlerHostname: options.crawler_hostname,
       crawlList: options.crawl_list as string,
       crawlPageWithAds: options.crawl_page_with_ads ? true : false,
       dataset: options.dataset ? options.dataset : 'test',
-      headless: (typeof options.headless == 'boolean') || options.headless == 'new' ? options.headless : 'new',
+      headless: headless,
       jobId: options.job_id as number,
       label: options.label,
       maxPageCrawlDepth: options.max_page_crawl_depth !== undefined ? options.max_page_crawl_depth as number : 2,

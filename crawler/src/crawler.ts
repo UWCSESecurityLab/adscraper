@@ -15,6 +15,7 @@ sourceMapSupport.install();
 
 export interface CrawlerFlags {
   clearCookiesBeforeCT: boolean,
+  clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage',
   crawlArticle: boolean,
   crawlerHostname: string,
   crawlList: string,
@@ -53,9 +54,8 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
   globalThis.OVERALL_TIMEOUT = crawlerFlags.warmingCrawl ? 10 * 60 * 1000 : 25 * 60 * 1000;
   // How long the crawler can spend on each clickthrough page
   globalThis.CLICKTHROUGH_TIMEOUT = crawlerFlags.warmingCrawl ? 5 * 1000 : 30 * 1000;
-  // How long the crawler should wait after clicking before trying an alternative
-  // click method.
-  globalThis.AD_CLICK_TIMEOUT = 5 * 1000;
+  // How long the crawler should wait for something to happen after clicking an ad
+  globalThis.AD_CLICK_TIMEOUT = 2 * 1000;
   // How long the crawler can spend waiting for the HTML of a page.
   globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;
   // How long the crawler can spend waiting for the HTML and screenshot of an ad.
@@ -223,7 +223,8 @@ export async function crawl(flags: CrawlerFlags) {
       })();
       await Promise.race([_crawl, urlTimeout]);
       await seedPage.close();
-    } catch (e) {
+    } catch (e: any) {
+      log.error(e);
       await seedPage.close();
       continue;
     }
