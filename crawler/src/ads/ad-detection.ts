@@ -1,22 +1,19 @@
 import { ElementHandle, JSHandle, Page } from 'puppeteer';
 import easylist from './easylist_selectors.json' assert { type: "json" };
 
+// Add any custom ad selectors here.
 const combinedSelectors = easylist.concat([
   '.ob-widget',
   '[id^="rc_widget"]',
 ]);
 
 /**
- * This function can be executed in the browser context to look for ads that
- * match the provided CSS selectors. The idea is to take a huge list of
- * selectors (like from Easylist) and filter them down to a small number of
- * selectors that match the ads on the page, and filter out duplicates/children.
- *
- * @param selectors CSS selectors for the elements you want.
- * @returns A much smaller array of selectors for matching elements.
+ * Detects ads in the page using EasyList's CSS selectors, and returns an
+ * array of element handles corresponding to ads.
+ * This function also deduplicates any identical elements, or elements nested
+ * inside each other.
  */
-export async function identifyAdsInDOM(
-    page: Page) {
+export async function identifyAdsInDOM(page: Page) {
 
   const ads: JSHandle<Element[]> =
     await page.evaluateHandle((selectors: string[]) => {
@@ -65,20 +62,3 @@ export async function identifyAdsInDOM(
   }
   return adHandles;
 }
-
-// /**
-//  * Gets ElementHandles to ads on a page, given a list of CSS selectors.
-//  * @param page The page to get handles to ads from.
-//  * @param selectors CSS selectors for ads on this page
-//  * @returns A Map of ElementHandles->id for each matching selector
-//  */
-// export async function getHandlesToAds(page: Page, selectors: string[]) {
-//   const elements = new Set<ElementHandle>();
-//   for (let selector of selectors) {
-//     let selected = await page.$(selector);
-//     if (selected) {
-//       elements.add(selected);
-//     }
-//   }
-//   return elements;
-// }

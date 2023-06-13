@@ -1,5 +1,5 @@
 import { ElementHandle, Page } from 'puppeteer';
-import * as log from './log.js';
+import * as log from '../util/log.js';
 
 // These functions are used to instrument a page to monitor DOM mutations.
 // - |injectDOMListener| should be injected into the page context on load, and

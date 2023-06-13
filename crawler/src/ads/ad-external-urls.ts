@@ -1,13 +1,16 @@
 import { ElementHandle } from 'puppeteer';
 
-export interface ExternalDomains {
+export interface AdExternalUrls {
   anchorHrefs: string[],
   iframeSrcs: string[],
   scriptSrcs: string[],
   imgSrcs: string[]
 }
 
-export async function extractExternalDomains(handle: ElementHandle) {
+// Extracts URLs in the HTML content of an ad, such as the "href" attribute in
+// an <a> element, or the "src" attribute in an <img> element.
+// This data can sometimes indicate the provenance of an ad.
+export async function extractExternalUrls(handle: ElementHandle) {
   const anchorHrefs = await handle.$$eval('a', (elements) => {
     let anchors = elements as HTMLAnchorElement[];
     return anchors.map(a => a.href);

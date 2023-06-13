@@ -1,6 +1,6 @@
-import { Client } from 'pg';
-import { ExternalDomains } from './domain-extractor.js';
-import { ScrapedIFrame } from './iframe-scraper.js';
+import pg from 'pg';
+import { AdExternalUrls } from '../ads/ad-external-urls.js';
+import { ScrapedIFrame } from '../ads/iframe-scraper.js';
 import * as log from './log.js';
 
 export interface dbInsertOptions {
@@ -53,12 +53,59 @@ export interface Page {
   referrer_ad?: number
 }
 
+/**
+ * Wrapper over the postgres client for inserting data from the crawler.
+ * Singleton class - call initialize() at the beginning, call getInstance()
+ * subsequently from any other scope.
+ */
 export default class DbClient {
-  postgres: Client;
-  constructor(postgres: Client) {
-    this.postgres = postgres;
+  static instance: DbClient;
+  postgres: pg.Client;
+
+  private constructor(conf: pg.ClientConfig) {
+    this.postgres = new pg.Client(conf);
   }
 
+  /**
+   * Sets up a new DbClient. Must be called the first time this is used in
+   * the script.
+   * @param conf Postgres config
+   * @returns A DbClient instance.
+   */
+  static async initialize(conf: pg.ClientConfig) {
+    if (DbClient.instance) {
+      await DbClient.instance.postgres.end();
+    }
+    DbClient.instance = new DbClient(conf);
+    await DbClient.instance.postgres.connect();
+    log.info('Postgres driver initialized');
+    return DbClient.instance;
+  }
+
+  /**
+   * Gets the DbClient.
+   * @returns The global DbClient.
+   */
+  static getInstance() {
+    if (!DbClient.instance) {
+      throw new Error('DbClient must be initialized before use');
+    }
+    return DbClient.instance;
+  }
+
+  /**
+   * Ends the client connection to the database.
+   * @returns
+   */
+  async end() {
+    return this.postgres.end();
+  }
+
+  /**
+   * Generic insert wrapper
+   * @param options
+   * @returns
+   */
   async insert(options: dbInsertOptions) {
     try {
       const columns = Object.keys(options.data).join(', ');
@@ -101,7 +148,7 @@ export default class DbClient {
         }
       }) as number;
       if (iframe.externals) {
-        await this.archiveExternalDomains(iframe.externals, adId, frameId);
+        await this.archiveExternalUrls(iframe.externals, adId, frameId);
       }
       for (let child of iframe.children) {
         await this.archiveScrapedIFrame(child, adId, frameId);
@@ -149,7 +196,7 @@ export default class DbClient {
     }
   }
 
-  async archiveExternalDomains(externals: ExternalDomains, adId: number, iframeId?: number) {
+  async archiveExternalUrls(externals: AdExternalUrls, adId: number, iframeId?: number) {
     const {anchorHrefs, iframeSrcs, scriptSrcs, imgSrcs} = externals;
     const insertDomains = async (domains: string[], type: string) => {
       for (let d of domains) {

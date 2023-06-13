@@ -2,10 +2,9 @@ import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 import fs from 'fs';
 import os from 'os';
-import pg from 'pg';
 import sourceMapSupport from 'source-map-support';
 import * as crawler from './crawler.js';
-import * as log from './log.js';
+import * as log from './util/log.js';
 sourceMapSupport.install();
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
@@ -235,11 +234,6 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 }
 
 (async function() {
-  // Initialize Postgres client
-  let postgres = new pg.Client(pgConf);
-  await postgres.connect();
-  log.info('Postgres driver initialized');
-
   try {
     await crawler.crawl({
       clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
@@ -250,9 +244,11 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       dataset: options.dataset ? options.dataset : 'test',
       disableAllCookies: options.disable_all_cookies ? true : false,
       disableThirdPartyCookies: options.disable_third_party_cookies ? true : false,
+      headless: (typeof options.headless == 'boolean') || options.headless == 'new' ? options.headless : 'new',
       jobId: options.job_id as number,
       label: options.label,
       maxPageCrawlDepth: options.max_page_crawl_depth !== undefined ? options.max_page_crawl_depth as number : 2,
+      pgConf: pgConf,
       screenshotAdsWithContext: options.screenshot_ads_with_context as boolean,
       screenshotDir: options.screenshot_dir as string,
       externalScreenshotDir: options.external_screenshot_dir as string | undefined,
@@ -260,11 +256,12 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       warmingCrawl: options.warming_crawl ? true : false,
       userDataDir: options.user_data_dir,
       updateCrawlerIpField: options.update_crawler_ip_field as boolean
-    }, postgres);
-    await postgres.end();
+    });
+    log.info('Crawl succeeded');
     process.exit(0);
-  } catch (e) {
-    await postgres.end();
+  } catch (e: any) {
+    log.error(e);
+    log.warning('Crawl failed');
     process.exit(1);
   }
 })();

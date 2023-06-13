@@ -1,5 +1,5 @@
 import { ElementHandle, Frame } from 'puppeteer';
-import {ExternalDomains, extractExternalDomains} from './domain-extractor.js';
+import {AdExternalUrls, extractExternalUrls} from './ad-external-urls.js';
 
 /**
  * This interface contains the scraped data and metadata from an iframe. Because
@@ -10,7 +10,7 @@ export interface ScrapedIFrame {
   timestamp: Date,
   url: string,
   html: string,
-  externals?: ExternalDomains,
+  externals?: AdExternalUrls,
   children: Array<ScrapedIFrame>,
 }
 
@@ -29,7 +29,7 @@ export async function scrapeIFramesInElement(ad: ElementHandle) {
       continue;
     }
     // log.verbose('Scraping iframe ' + frame.url());
-    const scrapedIFrame = await scrape(frame);
+    const scrapedIFrame = await scrapeIframe(frame);
     scrapedIFrames.push(scrapedIFrame);
   }
   return scrapedIFrames;
@@ -41,7 +41,7 @@ export async function scrapeIFramesInElement(ad: ElementHandle) {
  * @returns A promise containing the ScrapedIFrame, which will contain
  * the ScrapedIFrames of any sub-iframes.
  */
-export async function scrape(iframe: Frame): Promise<ScrapedIFrame> {
+export async function scrapeIframe(iframe: Frame): Promise<ScrapedIFrame> {
   try {
     let ts = new Date();
     // WORKAROUND: await iframe.content() hangs indefinitely for some reason on
@@ -55,13 +55,13 @@ export async function scrape(iframe: Frame): Promise<ScrapedIFrame> {
     const root = await iframe.$('html');
     let externals;
     if (root) {
-      externals = await extractExternalDomains(root);
+      externals = await extractExternalUrls(root);
     }
 
     let children: Array<ScrapedIFrame>;
     if (iframe.childFrames().length > 0) {
       children = await Promise.all(
-        iframe.childFrames().map(scrape));
+        iframe.childFrames().map(scrapeIframe));
     } else {
       children = [];
     }

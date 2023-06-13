@@ -1,7 +1,8 @@
 import { Page } from 'puppeteer';
-import * as adDetection from './ad-detection.js';
+import * as adDetection from '../ads/ad-detection.js';
 import getArticleFromRSS from './get-rss-article.js';
-import * as log from './log.js';
+import * as log from '../util/log.js';
+import { sleep } from '../util/timeout.js';
 
 /**
  * Randomly picks links from a page, opens them in a new tab, and checks if it
@@ -40,7 +41,7 @@ export async function randomGuessPage(
     // log.info(`${page.url()}: Trying link ${url}`);
     try {
       await guessPage.goto(url);
-      await guessPage.waitForTimeout(1500);
+      await sleep(1500);
       if (await guessCriteria(guessPage)) {
         // log.info(`${page.url()}: Found a page that met the criteria at ${url}`);
         await guessPage.close();
@@ -78,20 +79,24 @@ export async function findArticle(page: Page) {
   log.info(`${page.url()}: Looking for article via RSS`);
   articleUrl = await getArticleFromRSS(page);
   if (articleUrl) {
+    log.info(`${page.url()}: Successfully found page with ads: ${articleUrl}`);
     return articleUrl;
   }
 
-  log.info(`${page.url()}: Looking for article by randomly guessing links`);
-  return randomGuessPage(page, 20, async (page: Page) => {
+  log.info(`${page.url()}: No RSS feed available, for article by randomly guessing links`);
+  let guessUrl = await randomGuessPage(page, 20, async (page: Page) => {
     await page.evaluate(isReaderableScript);
     return page.evaluate(() => {
       // @ts-ignore
       return isProbablyReaderable(document);
     });
   });
+  log.info(`${page.url()}: Guessing that this page is an article: ${articleUrl}`);
+  return guessUrl;
 }
 
 export async function findPageWithAds(page: Page) {
+  log.info(`${page.url()}: Finding random page with ads on it`);
   return randomGuessPage(page, 20, async (page: Page) => {
     const ads = await adDetection.identifyAdsInDOM(page)
     return ads.size > 0;
