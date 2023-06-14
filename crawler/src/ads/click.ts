@@ -9,28 +9,26 @@ import { PageType, scrapePage } from "../pages/page-scraper.js";
  * @param page The page the ad appears on.
  * @param parentDepth The depth of the parent page of the ad.
  * @param crawlId The database id of this crawl job.
- * @param pageId The database id of the page.
  * @param adId The database id of the ad.
+ * @param pageId The database id of the page (if it was scraped).
  * @returns Promise that resolves when crawling is complete for the linked page,
  * and any sub pages opened by clicking on ads in the linked page.
  */
 export function clickAd(
   ad: ElementHandle,
   page: Page,
-  parentDepth: number,
   crawlId: number,
-  pageId: number,
-  adId: number) {
-  // log.info(`${page.url()}: Clicking ad`)
+  adId: number,
+  pageId?: number) {
   return new Promise<void>(async (resolve, reject) => {
+    // Reference to any new tab that is opened, that can be called in the
+    // following timeout if necessary.
     let ctPage: Page | undefined;
 
     // Create timeout for processing overall clickthrough (including the landing page).
     // If it takes longer than this, abort handling this ad.
     const timeout = setTimeout(() => {
-      if (ctPage) {
-        ctPage.close();
-      }
+      ctPage?.close();
       page.removeAllListeners();
       reject(new Error(`${page.url()}: Clickthrough timed out - ${CLICKTHROUGH_TIMEOUT}ms`));
     }, CLICKTHROUGH_TIMEOUT);
@@ -75,27 +73,23 @@ export function clickAd(
         req.abort('aborted');
         clearTimeout(clickTimeout);
 
-        if (FLAGS.clickAds == 'clickAndBlockLoad') {
+        if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
           // Store the request URL and continue.
           // TODO: store the URL somewhere
           console.log('Intercepted and blocked ad (navigation):', req.url());
           await cleanUp();
           resolve();
           return;
-        } else if (FLAGS.clickAds == 'clickAndScrapeLandingPage') {
+        } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
           // Open the blocked URL in a new tab, so that we can keep the previous
           // one open.
           log.info(`Blocked attempted navigation to ${req.url()}, opening in a new tab`);
           let newPage = await BROWSER.newPage();
           try {
             ctPage = newPage;
-            if (!FLAGS.warmingCrawl) {
-              await injectDOMListener(newPage)
-            }
             await newPage.goto(req.url(), { referer: req.headers().referer });
             await scrapePage(newPage, {
               pageType: PageType.LANDING,
-              currentDepth: parentDepth + 2,
               crawlId: crawlId,
               referrerPage: pageId,
               referrerAd: adId
@@ -121,7 +115,7 @@ export function clickAd(
     // If we want to block the popup from loading, we need to use the
     // the Chrome DevTools protocol to auto-attach to the popup when it opens,
     // and intercept the request.
-    if (FLAGS.clickAds == 'clickAndBlockLoad') {
+    if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
       // Enable auto-attaching the devtools debugger to new targets (i.e. popups)
       await cdp.send('Target.setAutoAttach', {
         waitForDebuggerOnStart: true,
@@ -133,8 +127,6 @@ export function clickAd(
       });
 
       cdp.on('Target.attachedToTarget', async ({ sessionId, targetInfo }) => {
-        clearTimeout(clickTimeout);
-
         // Get the CDP session corresponding to the popup
         let connection = cdp.connection();
         if (!connection) {
@@ -167,12 +159,20 @@ export function clickAd(
         });
 
         // Allow the popup to continue executing and make the navigation request
-        await popupCdp.send('Runtime.runIfWaitingForDebugger');
+        try {
+          await popupCdp.send('Runtime.runIfWaitingForDebugger');
+        } catch (e) {
+          // Sometimes this fails because the request is intercepted before
+          // this request is sent, and the target is already closed. However,
+          // in that case we successfully got the data (somehow) so we can
+          // safely do nothing here.
+          log.info('Popup navigation request caught in CDP before resuming tab. Continuing...');
+        }
       });
 
-    // If we want to allow the popup to load, we can listen for the popup
-    // event in puppeteer and use that page.
-    } else if (FLAGS.clickAds == 'clickAndScrapeLandingPage') {
+      // If we want to allow the popup to load, we can listen for the popup
+      // event in puppeteer and use that page.
+    } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
       page.on('popup', (newPage) => {
         clearTimeout(clickTimeout);
 
@@ -184,7 +184,6 @@ export function clickAd(
           try {
             await scrapePage(newPage, {
               pageType: PageType.LANDING,
-              currentDepth: parentDepth + 2,
               crawlId: crawlId,
               referrerPage: pageId,
               referrerAd: adId
@@ -200,7 +199,6 @@ export function clickAd(
         });
       });
     }
-
 
     // Finally click the ad
     log.info(`${page.url()}: Clicking on ad ${adId}`);

@@ -1,7 +1,7 @@
 import fs from 'fs';
 import { ClientConfig } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import sourceMapSupport from 'source-map-support';
 import * as domMonitor from './ads/dom-monitor.js';
 import { findArticle, findPageWithAds } from './pages/find-page.js';
@@ -14,24 +14,30 @@ import { scrapeAdsOnPage } from './ads/ad-scraper.js';
 sourceMapSupport.install();
 
 export interface CrawlerFlags {
-  clearCookiesBeforeCT: boolean,
-  clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage',
-  crawlArticle: boolean,
-  crawlerHostname: string,
-  crawlList: string,
-  crawlPageWithAds: boolean,
-  dataset: string,
-  headless: boolean | 'new',
   jobId: number,
-  label?: string,
-  maxPageCrawlDepth: number,
+  outputDir: string,
   pgConf: ClientConfig,
-  screenshotAdsWithContext: boolean
-  screenshotDir: string,
-  externalScreenshotDir?: string,
-  skipCrawlingSeedUrl: boolean,
-  warmingCrawl: boolean,
-  userDataDir?: string,
+  crawlerHostname: string,
+  crawlListFile: string,
+
+  chromeOptions: {
+    profileDir?: string,
+    headless: boolean | 'new',
+  }
+
+  crawlOptions: {
+    shuffleCrawlList: boolean,
+    crawlAdditionalPageWithAds: boolean,
+    crawlAdditionalArticlePage: boolean
+  }
+
+  scrapeOptions: {
+    scrapeSite: boolean,
+    scrapeAds: boolean,
+    clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage',
+    screenshotAdsWithContext: boolean
+  }
+
   updateCrawlerIpField: boolean
 };
 
@@ -48,53 +54,54 @@ declare global {
   var VIEWPORT: { width: number, height: number}
 }
 
-function setupGlobals(crawlerFlags: CrawlerFlags) {
+function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
   globalThis.FLAGS = crawlerFlags;
   // How long the crawler should spend on the whole crawl (all pages/ads/CTs)
-  globalThis.OVERALL_TIMEOUT = crawlerFlags.warmingCrawl ? 10 * 60 * 1000 : 25 * 60 * 1000;
+  // 15 min per item in the crawl list
+  globalThis.OVERALL_TIMEOUT = crawlList.length * 15 * 60 * 1000;
   // How long the crawler can spend on each clickthrough page
-  globalThis.CLICKTHROUGH_TIMEOUT = crawlerFlags.warmingCrawl ? 5 * 1000 : 30 * 1000;
+  globalThis.CLICKTHROUGH_TIMEOUT = 30 * 1000;  // 30s
   // How long the crawler should wait for something to happen after clicking an ad
-  globalThis.AD_CLICK_TIMEOUT = 2 * 1000;
+  globalThis.AD_CLICK_TIMEOUT = 2 * 1000;  // 2s
   // How long the crawler can spend waiting for the HTML of a page.
-  globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;
+  globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;  // 1min
   // How long the crawler can spend waiting for the HTML and screenshot of an ad.
   // must be greater than |AD_SLEEP_TIME|
-  globalThis.AD_CRAWL_TIMEOUT = 20 * 1000;
+  globalThis.AD_CRAWL_TIMEOUT = 20 * 1000;  // 20s
   // How long the crawler should sleep before scraping/screenshotting an ad
-  globalThis.AD_SLEEP_TIME = crawlerFlags.warmingCrawl ? 0 : 5 * 1000;
-  // How long the crawler should sleep before çrawling a page
-  globalThis.PAGE_SLEEP_TIME = crawlerFlags.warmingCrawl ? 0 : 10 * 1000;
+  globalThis.AD_SLEEP_TIME = 5 * 1000;  // 5s
+  // How long the crawler should sleep before crawling a page
+  globalThis.PAGE_SLEEP_TIME = 10 * 1000;  // 10s
   // Size of the viewport
   globalThis.VIEWPORT = { width: 1366, height: 768 };
 }
 
 export async function crawl(flags: CrawlerFlags) {
   // Validate arguments
-  if (!fs.existsSync(flags.screenshotDir)) {
-    console.log(`${flags.screenshotDir} is not a valid directory`);
+  if (!fs.existsSync(flags.outputDir)) {
+    console.log(`${flags.outputDir} is not a valid directory`);
     process.exit(1);
   }
 
-  if (!fs.existsSync(flags.crawlList)) {
-    console.log(`${flags.crawlList} does not exist.`);
+  if (!fs.existsSync(flags.crawlListFile)) {
+    console.log(`${flags.crawlListFile} does not exist.`);
     process.exit(1);
   }
 
-  const urls = fs.readFileSync(flags.crawlList).toString().trimEnd().split('\n');
+  const crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
   let i = 1;
-  for (let url of urls) {
+  for (let url of crawlList) {
     try {
       new URL(url);
     } catch (e) {
-      console.log(`Invalid URL in ${flags.crawlList}, line ${i}: ${url}`);
+      console.log(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
       process.exit(1);
     }
   }
 
   // Initialize global variables and clients
   console.log(flags);
-  setupGlobals(flags);
+  setupGlobals(flags, crawlList);
 
   const db = await DbClient.initialize(FLAGS.pgConf);
 
@@ -107,15 +114,15 @@ export async function crawl(flags: CrawlerFlags) {
   globalThis.BROWSER = await puppeteer.launch({
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
-    headless: FLAGS.headless,
-    userDataDir: FLAGS.userDataDir
+    headless: FLAGS.chromeOptions.headless,
+    userDataDir: FLAGS.chromeOptions.profileDir
   });
   const version = await BROWSER.version();
 
   log.info('Running ' + version);
 
   // Main loop through crawl list
-  for (let url of urls) {
+  for (let url of crawlList) {
     // Set overall timeout for this crawl list item
     let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
       `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
@@ -127,88 +134,36 @@ export async function crawl(flags: CrawlerFlags) {
         // Insert record for this crawl list item
         try {
           let crawlId: number;
-          if (!FLAGS.skipCrawlingSeedUrl) {
-            crawlId = await db.insert({
-              table: 'crawl',
-              returning: 'id',
-              data: {
-                timestamp: new Date(),
-                job_id: FLAGS.jobId,
-                dataset: FLAGS.dataset,
-                label: FLAGS.label,
-                seed_url: url,
-                warming_crawl: FLAGS.warmingCrawl
-              }
-            }) as number;
-          } else {
-            let crawlQuery = await db.postgres.query(`SELECT id FROM crawl WHERE job_id=$1 AND seed_url=$2 AND warming_crawl='f'`,
-              [FLAGS.jobId, url]);
-            crawlId = crawlQuery.rows[0].id as number;
-          }
+          crawlId = await db.insert({
+            table: 'crawl',
+            returning: 'id',
+            data: {
+              timestamp: new Date(),
+              job_id: FLAGS.jobId,
+              seed_url: url,
+            }
+          }) as number;
 
-          // Open and crawl the URL
-          log.info(`${url}: loading page`);
-          if (!FLAGS.skipCrawlingSeedUrl && !FLAGS.warmingCrawl) {
-            await domMonitor.injectDOMListener(seedPage);
-          }
-          await seedPage.goto(url, { timeout: 60000 });
+          // Open the URL and scrape it (if specified)
+          await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId);
 
-          // Crawl the page
-          if (!FLAGS.skipCrawlingSeedUrl) {
-            const pageId = await scrapePage(seedPage, {
-              pageType: PageType.HOME,
-              currentDepth: 1,
-              crawlId: crawlId
-            });
-
-            await scrapeAdsOnPage(seedPage, {
-              crawlId: crawlId,
-              parentPageId: pageId,
-              parentDepth: 1
-            });
-
-          }
-
-          // Open and crawl articles or subpages, if applicable
-          if (!FLAGS.warmingCrawl && FLAGS.crawlArticle) {
-            // Find and crawl an article on the page
+          // Open additional pages (if specified) and scrape them (if specified)
+          if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
             const article = await findArticle(seedPage);
             if (article) {
-              log.info(`${article}: loading page`);
               const articlePage = await BROWSER.newPage();
-              await domMonitor.injectDOMListener(articlePage);
-              await articlePage.goto(article, { timeout: 60000 });
-              const pageId = await scrapePage(articlePage, {
-                pageType: PageType.ARTICLE,
-                currentDepth: 1,
-                crawlId: crawlId
-              });
-              await scrapeAdsOnPage(seedPage, {
-                crawlId: crawlId,
-                parentPageId: pageId,
-                parentDepth: 1
-              });
+              await loadAndHandlePage(url, articlePage, PageType.SUBPAGE, crawlId);
               await articlePage.close();
             } else {
               log.strError(`${url}: Couldn't find article`);
             }
-          } else if (!FLAGS.warmingCrawl && FLAGS.crawlPageWithAds) {
+          }
+
+          if (FLAGS.crawlOptions.crawlAdditionalPageWithAds) {
             const urlWithAds = await findPageWithAds(seedPage);
             if (urlWithAds) {
-              log.info(`${urlWithAds}: loading page`);
               const adsPage = await BROWSER.newPage();
-              await domMonitor.injectDOMListener(adsPage);
-              await adsPage.goto(urlWithAds, { timeout: 60000 });
-              const pageId = await scrapePage(adsPage, {
-                pageType: PageType.SUBPAGE,
-                currentDepth: 1,
-                crawlId: crawlId
-              });
-              await scrapeAdsOnPage(seedPage, {
-                crawlId: crawlId,
-                parentPageId: pageId,
-                parentDepth: 1
-              });
+              await loadAndHandlePage(url, adsPage, PageType.SUBPAGE, crawlId);
               await adsPage.close();
             } else {
               log.strError(`${url}: Couldn't find article`);
@@ -222,15 +177,47 @@ export async function crawl(flags: CrawlerFlags) {
         }
       })();
       await Promise.race([_crawl, urlTimeout]);
-      await seedPage.close();
     } catch (e: any) {
       log.error(e);
+    } finally {
       await seedPage.close();
-      continue;
     }
   }
   await BROWSER.close();
   log.info('Crawler instance completed');
+}
+
+/**
+ *
+ * @param url URL to visit in the page
+ * @param page Tab/Page that the URL should be visited in
+ * @param pageType Whether the URL is the one in the crawl list, or an
+ * additional URL that was found from a link on the initial page.
+ * @param crawlId ID of the crawl
+ */
+async function loadAndHandlePage(url: string, page: Page, pageType:
+    PageType, crawlId: number) {
+  log.info(`${url}: loading page`);
+  if (FLAGS.scrapeOptions.scrapeAds) {
+    await domMonitor.injectDOMListener(page);
+  }
+  await page.goto(url, { timeout: 60000 });
+
+  // Crawl the page
+  let pageId: number | undefined;
+  if (FLAGS.scrapeOptions.scrapeSite) {
+    pageId = await scrapePage(page, {
+      pageType: pageType,
+      crawlId: crawlId
+    });
+  }
+  if (FLAGS.scrapeOptions.scrapeAds) {
+    await scrapeAdsOnPage(page, {
+      crawlId: crawlId,
+      parentPageId: pageId,
+      pageType: pageType,
+    });
+  }
 }
 
 async function setCrawlerIpField(jobId: number) {

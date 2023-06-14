@@ -5,18 +5,20 @@ import { v4 as uuidv4 } from 'uuid';
 import * as log from '../util/log.js';
 import { createAsyncTimeout, sleep } from '../util/timeout.js';
 import DbClient from '../util/db.js';
+import urlToPathSafeStr from '../util/urlToPathSafeStr.js';
+import fs from 'fs';
 
 export enum PageType {
-  HOME = 'home',
-  ARTICLE = 'article',
-  SUBPAGE = 'subpage',
-  LANDING = 'landing'
+  MAIN = 'main',  // The URL specified in the crawl list
+  SUBPAGE = 'subpage',  // A link found on the main page (article or randomly guessed page)
+  LANDING = 'landing'  // An ad landing page
 }
 
 interface ScrapedPage {
   timestamp: Date,
   url: string,
-  html: string
+  html: string,
+  mhtml: string,
   screenshot: string,
   screenshot_host: string,
 }
@@ -32,15 +34,14 @@ interface ScrapedPage {
  */
 interface ScrapePageMetadata {
   pageType: PageType,
-  currentDepth: number,
+  // currentDepth: number,
   crawlId: number,
   referrerPage?: number,
   referrerAd?: number
 }
+
 /**
- * Scrapes a page and all of the ads appearing on it, and saves the content in
- * the database. If the maximum crawl depth has not been reached, any ads on the
- * page will be clicked and crawled too.
+ * Scrapes a page and saves it in the database.
  * @param page The page to be crawled.
  * @param metadata Crawler metadata linked to this page.
  * @returns The id of the crawled page in the database.
@@ -56,23 +57,32 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
   const _crawlPage = (async () => {
     try {
       let pageId = -1;
-      if (!FLAGS.warmingCrawl) {
-        const scrapedPage = await scrapePageContent(
-          page,
-          FLAGS.screenshotDir,
-          FLAGS.externalScreenshotDir,
-          FLAGS.crawlerHostname);
-        pageId = await db.archivePage({
-          crawl_id: metadata.crawlId,
-          job_id: FLAGS.jobId,
-          page_type: metadata.pageType,
-          depth: metadata.currentDepth,
-          referrer_page: metadata.referrerPage,
-          referrer_ad: metadata.referrerAd,
-          ...scrapedPage
-        });
-        log.info(`${page.url()}: Archived page content`);
+
+      const pagesDir = path.join(
+        FLAGS.outputDir,
+        'job_' + FLAGS.jobId.toString(),
+        'scraped_pages',
+        urlToPathSafeStr(page.url())
+      );
+      if (!fs.existsSync(pagesDir)) {
+        fs.mkdirSync(pagesDir, { recursive: true });
       }
+
+      const scrapedPage = await scrapePageContent(
+        page,
+        pagesDir,
+        FLAGS.crawlerHostname);
+
+      pageId = await db.archivePage({
+        crawl_id: metadata.crawlId,
+        job_id: FLAGS.jobId,
+        page_type: metadata.pageType,
+        // depth: metadata.currentDepth,
+        referrer_page: metadata.referrerPage,
+        referrer_ad: metadata.referrerAd,
+        ...scrapedPage
+      });
+      log.info(`${page.url()}: Archived page content`);
       clearTimeout(timeoutId);
       return pageId;
 
@@ -89,40 +99,51 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
  * Collects the content of the page: a screenshot, the HTML content, and
  * (TODO: MHTML content).
  * @param page The page to screenshot
- * @param screenshotDir Where the screenshot should be saved
- * @param externalScreenshotDir If crawling in a Docker container, the location
- * where the screenshot will be saved in the Docker host.
+ * @param outputDir Path to where the screenshot and HTML files should be saved.
  * @param screenshotHost The hostname of the machine on which the screenshot
  * will be stored.
  * @returns A ScrapedPage containing the screenshot, HTML, and timestamp.
  */
 async function scrapePageContent(
   page: Page,
-  screenshotDir: string,
-  externalScreenshotDir: string | undefined,
+  outputDir: string,
+  // externalScreenshotDir: string | undefined,
   screenshotHost: string): Promise<ScrapedPage> {
   try {
-    const content = await page.content();
-    const screenshotFile = uuidv4();
-    const savePath = path.join(screenshotDir, screenshotFile);
-    const realPath = externalScreenshotDir
-      ? path.join(externalScreenshotDir, screenshotFile)
-      : undefined;
+    const pageUuid = uuidv4();
+    const outputFilePrefix = path.join(outputDir, pageUuid);
 
+    // Save HTML content
+    const html = await page.content();
+    const htmlFile = outputFilePrefix + '.html';
+    fs.writeFileSync(htmlFile, html);
+
+    // Save page snapshot
+    const cdp = await page.target().createCDPSession();
+    await cdp.send('Page.enable');
+    const mhtml = (await cdp.send('Page.captureSnapshot', { format: 'mhtml' })).data;
+    const mhtmlFile = outputFilePrefix + '.mhtml';
+    fs.writeFileSync(mhtmlFile, mhtml);
+
+    // Save screenshot
     const buf = await page.screenshot({ fullPage: true });
     const img = sharp(buf);
     const metadata = await img.metadata();
+    let screenshotFile;
     if (metadata.height && metadata.height >= 16384) {
-      await img.png().toFile(savePath + '.png');
+      screenshotFile = outputFilePrefix + '.png';
+      await img.png().toFile(outputFilePrefix);
     } else {
-      await img.webp({ lossless: true }).toFile(savePath + '.webp');
+      screenshotFile = outputFilePrefix + '.webp'
+      await img.webp({ lossless: true }).toFile(screenshotFile);
     }
 
     return {
       timestamp: new Date(),
       url: page.url(),
-      html: content,
-      screenshot: realPath ? realPath : savePath,
+      html: htmlFile,
+      mhtml: mhtmlFile,
+      screenshot: screenshotFile,
       screenshot_host: screenshotHost
     };
   } catch (e) {

@@ -26,13 +26,23 @@ interface JobSpec {
   // If |profileMode| is 'profiles', provide an array of ProfileCrawlListSpecs,
   // which specifies the Chromium profile name, location, and list of URLs for
   // that profile.
-  crawlListSpec: string | ProfileCrawlListSpec[];
+  crawlList: string | ProfileCrawlList[];
 
-  // If true, randomizes the order of sites crawled.
-  shuffle: boolean;
-
-  // Options for what data to collect on each page.
   crawlOptions: {
+    shuffleCrawlList: boolean;
+
+    // In addition to crawling the URL given, look for a link on the page
+    // that leads to a page with ads, and crawl that (using the same crawl settings).
+    findAndCrawlPageWithAds?: boolean;
+
+    // In addition to crawling the URL given, look for an article in the page's
+    // RSS feed, if it has one, and crawl that (using the same crawl settings).
+    // If no RSS feed exists, uses a heuristic to determine if a page is an article.
+    findAndCrawlArticlePage?: boolean;
+  }
+
+
+  scrapeOptions: {
     // Scrape the page content. Saves a screenshot, the HTML document, and
     // an MHTML archive.
     scrapeSite: boolean;
@@ -54,24 +64,15 @@ interface JobSpec {
 
     // Capture third party URLs associated with ads in the DOM
     // (e.g. src attributes in the ad and its iframe, scripts that modify the ad)
-    captureDOMThirdParties: boolean;
+    // captureDOMThirdParties: boolean;
 
     // When scraping a screenshot of ads
     screenshotAdsWithContext?: boolean;
-
-    // In addition to crawling the URL given, look for a link on the page
-    // that leads to a page with ads, and crawl that (using the same crawl settings).
-    findAndCrawlPageWithAds?: boolean;
-
-    // In addition to crawling the URL given, look for an article in the page's
-    // RSS feed, if it has one, and crawl that (using the same crawl settings).
-    // If no RSS feed exists, uses a heuristic to determine if a page is an article.
-    findAndCrawlArticlePage?: boolean;
   }
 }
 
 
-interface ProfileCrawlListSpec {
+interface ProfileCrawlList {
   // User provided name for the profile
   profileId: string;
   // Location of the Chrome user-data-dir to use for this crawl.

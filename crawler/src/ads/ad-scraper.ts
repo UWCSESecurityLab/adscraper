@@ -1,16 +1,19 @@
+import fs from 'fs';
 import path from 'path';
+import { ElementHandle, Page } from 'puppeteer';
 import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
-import * as log from '../util/log.js';
-import { ElementHandle, Page } from 'puppeteer';
+import { PageType } from '../pages/page-scraper.js';
 import DbClient from '../util/db.js';
+import * as log from '../util/log.js';
 import { createAsyncTimeout, sleep } from '../util/timeout.js';
-import { scrapeIFramesInElement } from './iframe-scraper.js';
-import { matchDOMUpdateToAd } from './dom-monitor.js';
+import urlToPathSafeStr from '../util/urlToPathSafeStr.js';
 import { identifyAdsInDOM } from './ad-detection.js';
-import { splitChumbox } from './chumbox-handler.js';
 import { extractExternalUrls } from './ad-external-urls.js';
+import { splitChumbox } from './chumbox-handler.js';
 import { clickAd } from './click.js';
+import { matchDOMUpdateToAd } from './dom-monitor.js';
+import { scrapeIFramesInElement } from './iframe-scraper.js';
 
 // Handle to an ad. We store two handles: the screenshot target, which
 // is the entire area of the ad, and the click target, which is the region
@@ -39,15 +42,17 @@ interface ScrapedAd {
 
 /**
  * Crawler metadata to be stored with scraped ad data.
- * @property parentPageId: The database id of the page the ad appears on
- * @property parentDepth: The depth of the parent page
+ * @property crawlId: id of the current crawl list entry
+ * @property pageType: Type of the parent page
+ * @property parentPageId: The database id of the page the ad appears on, if it was scraped
  * @property chumboxId: The chumbox the ad belongs to, if applicable
  * @property platform: The ad platform used by this ad, if identified
  */
 interface CrawlAdMetadata {
   crawlId: number,
-  parentPageId: number,
-  parentDepth: number,
+  pageType: PageType,
+  parentPageId?: number,
+  // parentDepth: number,
   chumboxId?: number,
   platform?: string
 }
@@ -55,93 +60,92 @@ interface CrawlAdMetadata {
 export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
   const db = DbClient.getInstance();
 
-  try {
-    // Detect ads
-    const ads = await identifyAdsInDOM(page);
-    const adHandleToAdId = new Map<ElementHandle, number>();
-    log.info(`${page.url()}: ${ads.size} ads identified`);
+  // Detect ads
+  const ads = await identifyAdsInDOM(page);
+  const adHandleToAdId = new Map<ElementHandle, number>();
+  log.info(`${page.url()}: ${ads.size} ads identified`);
 
-    // Main loop through all ads on page
-    for (let ad of ads) {
-      // An ad can contain multiple sub-ads (a "chumbox"). We store the handles
-      // in case this happens.
-      let adHandles: AdHandles[];
-      let chumboxId: number | undefined;
-      let platform: string | undefined;
+  // Main loop through all ads on page
+  for (let ad of ads) {
+    // An ad can contain multiple sub-ads (a "chumbox"). We store the handles
+    // in case this happens.
+    let adHandles: AdHandles[];
+    let chumboxId: number | undefined;
+    let platform: string | undefined;
 
-      // Check and see if the ad is a chumbox.
-      let chumbox = await splitChumbox(ad);
-      if (chumbox) {
-        // If it is a chumbox, create the metadata in the database...
-        chumboxId = await db.insert({
-          table: 'chumbox',
-          returning: 'id',
-          data: { platform: chumbox.platform, parent_page: metadata.parentPageId }
-        });
-        platform = chumbox.platform;
-        // And use the array of ad handles for the next part.
-        adHandles = chumbox.adHandles;
-      } else {
-        // Otherwise, the array is just the one ad.
-        adHandles = [{ clickTarget: ad, screenshotTarget: ad }];
-      }
+    // Check and see if the ad is a chumbox.
+    let chumbox = await splitChumbox(ad);
+    if (chumbox) {
+      // If it is a chumbox, create the metadata in the database...
+      chumboxId = await db.insert({
+        table: 'chumbox',
+        returning: 'id',
+        data: { platform: chumbox.platform, parent_page: metadata.parentPageId }
+      });
+      platform = chumbox.platform;
+      // And use the array of ad handles for the next part.
+      adHandles = chumbox.adHandles;
+    } else {
+      // Otherwise, the array is just the one ad.
+      adHandles = [{ clickTarget: ad, screenshotTarget: ad }];
+    }
 
-      for (let adHandle of adHandles) {
-
+    for (let adHandle of adHandles) {
+      let adId = -1;
+      try {
         // Scrape the ad
         const scrapeTarget = adHandle.screenshotTarget
           ? adHandle.screenshotTarget
           : adHandle.clickTarget;
-        let adId = await scrapeAd(scrapeTarget, page, {
+        adId = await scrapeAd(scrapeTarget, page, {
           crawlId: metadata.crawlId,
+          pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
-          parentDepth: metadata.parentDepth,
           chumboxId: chumboxId,
           platform: platform
         });
         log.info(`${page.url()}: Ad archived, saved under id=${adId}`);
         adHandleToAdId.set(ad, adId);
+      } catch (e) {
+        log.warning('Couldn\'t scrape ad: ' + e);
+        continue;
+      }
 
-        // Determine if we should click on the ad.
-        // Abort if we're at max depth
-        if (metadata.parentDepth + 2 >= 2 * FLAGS.maxPageCrawlDepth) {
-          log.info(`Reached max depth: ${metadata.parentDepth}`);
-          continue;
-        }
+      try {
+        if (FLAGS.scrapeOptions.clickAds !== 'noClick') {
+          // Abort if the ad is non-existent or too small
+          const bounds = await adHandle.clickTarget.boundingBox();
+          if (!bounds) {
+            log.warning(`Aborting click on ad ${adId}: no bounding box`);
+            continue;
+          }
+          if (bounds.height < 30 || bounds.width < 30) {
+            log.warning(`Aborting click on ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
+            continue;
+          }
 
-        // Abort if the ad is non-existent or too small
-        const bounds = await adHandle.clickTarget.boundingBox();
-        if (!bounds) {
-          log.warning(`Aborting click on ad ${adId}: no bounding box`);
-          continue;
+          // Ok, we're cleared to click.
+          await clickAd(
+            adHandle.clickTarget,
+            page,
+            metadata.crawlId,
+            adId,
+            metadata.parentPageId,
+          );
         }
-        if (bounds.height < 30 || bounds.width < 30) {
-          log.warning(`Aborting click on ad ${adId}: bounding box too small (${bounds.height},${bounds.width})`);
-          continue;
-        }
-
-        // Ok, we're cleared to click.
-        await clickAd(
-          adHandle.clickTarget,
-          page,
-          metadata.parentDepth,
-          metadata.crawlId,
-          metadata.parentPageId,
-          adId
-        );
+      } catch (e) {
+        log.warning('Couldn\'t click ad: ' + e);
       }
     }
-    const mutations = await matchDOMUpdateToAd(page, adHandleToAdId);
-    if (mutations.length > 0) {
-      for (let mutation of mutations) {
-        await db.insert({
-          table: 'ad_domain',
-          data: mutation
-        });
-      }
+  }
+  const mutations = await matchDOMUpdateToAd(page, adHandleToAdId);
+  if (mutations.length > 0) {
+    for (let mutation of mutations) {
+      await db.insert({
+        table: 'ad_domain',
+        data: mutation
+      });
     }
-  } catch (e: any) {
-    log.error(e);
   }
 }
 
@@ -165,29 +169,32 @@ export async function scrapeAd(ad: ElementHandle,
   const _crawlAd = (async () => {
     try {
       // Scroll ad into view, and sleep to give it time to load.
-      // But only sleep if crawling ads from the seed page, skip sleep on
-      // landing pages
-      const sleepDuration = metadata.parentDepth > 1 ? 0 : AD_SLEEP_TIME;
       await page.evaluate((e: Element) => {
         e.scrollIntoView({ block: 'center' });
       }, ad);
-      await sleep(sleepDuration);
+      await sleep(AD_SLEEP_TIME);
+
+      const adsDir = path.join(
+        FLAGS.outputDir,
+        'job_' + FLAGS.jobId.toString(),
+        'scraped_ads',
+        urlToPathSafeStr(page.url())
+      );
+      if (!fs.existsSync(adsDir)) {
+        fs.mkdirSync(adsDir, { recursive: true });
+      }
 
       // Scrape ad content
       const adContent = await scrapeAdContent(
-        page,
-        ad,
-        FLAGS.screenshotDir,
-        FLAGS.externalScreenshotDir,
+        page, ad, adsDir,
         FLAGS.crawlerHostname,
-        FLAGS.screenshotAdsWithContext);
+        FLAGS.scrapeOptions.screenshotAdsWithContext);
 
       const adId = await db.archiveAd({
         job_id: FLAGS.jobId,
         parent_page: metadata.parentPageId,
         chumbox_id: metadata.chumboxId,
         platform: metadata.platform,
-        depth: metadata.parentDepth + 1,
         ...adContent
       });
 
@@ -218,8 +225,6 @@ export async function scrapeAd(ad: ElementHandle,
  * @param page The page the element appears on
  * @param ad The ad/element to scroll to/scrape
  * @param screenshotDir Where the screenshot should be saved
- * @param externalScreenshotDir If the crawler is in a Docker container,
- * the directory where the screenshot actually lives, in the Docker host.
  * @param screenshotHost The hostname of the machine on which the screenshot
  * will be stored.
  * @returns A promise containing id of the stored ad in the database.
@@ -228,7 +233,7 @@ async function scrapeAdContent(
   page: Page,
   ad: ElementHandle,
   screenshotDir: string,
-  externalScreenshotDir: string | undefined,
+  // externalScreenshotDir: string | undefined,
   screenshotHost: string,
   withContext: boolean): Promise<ScrapedAd> {
 
@@ -237,92 +242,85 @@ async function scrapeAdContent(
 
   const screenshotFile = uuidv4() + '.webp';
   const savePath = path.join(screenshotDir, screenshotFile);
-  const realPath = externalScreenshotDir
-    ? path.join(externalScreenshotDir, screenshotFile)
-    : undefined;
+  // const realPath = externalScreenshotDir
+  // ? path.join(externalScreenshotDir, screenshotFile)
+  // : undefined;
   let screenshotFailed = false;
   let adInContextBB: sharp.Region | undefined;
-  try {
+  await page.evaluate((e: Element) => {
+    e.scrollIntoView({ block: 'center' });
+  }, ad);
 
-    await page.evaluate((e: Element) => {
-      e.scrollIntoView({ block: 'center' });
-    }, ad);
-
-    const abb = await ad.boundingBox();
-    if (!abb) {
-      throw new Error('No ad bounding box');
-    }
-    if (abb.height < 30 || abb.width < 30) {
-      throw new Error('Ad smaller than 30px in one dimension');
-    }
-
-    const viewport = page.viewport();
-    if (!viewport) {
-      throw new Error('Page has no viewport');
-    }
-
-    // Round the bounding box values in case they are non-integers
-    let adBB = {
-      left: Math.floor(abb.x),
-      top: Math.floor(abb.y),
-      height: Math.ceil(abb.height),
-      width: Math.ceil(abb.width)
-    }
-
-    // Compute bounding box if a margin is desired
-    const margin = 150;
-    const contextLeft = Math.max(adBB.left - margin, 0);
-    const contextTop = Math.max(adBB.top - margin, 0);
-    const marginTop = adBB.top - contextTop;
-    const marginLeft = adBB.left - contextLeft;
-    const marginBottom = adBB.top + adBB.height + margin < viewport.height
-      ? margin
-      : viewport.height - adBB.height - adBB.top;
-    const marginRight = adBB.left + adBB.width + margin < viewport.width
-      ? margin
-      : viewport.width - adBB.width - adBB.left;
-    const contextWidth = adBB.width + marginLeft + marginRight;
-    const contextHeight = adBB.height + marginTop + marginBottom;
-
-    const contextBB = {
-      left: contextLeft,
-      top: contextTop,
-      height: contextHeight,
-      width: contextWidth
-    };
-    // Recompute ad bounding box within the crop with context
-    if (withContext) {
-      adInContextBB = {
-        left: adBB.left - contextBB.left,
-        top: adBB.top - contextBB.top,
-        height: adBB.height,
-        width: adBB.width
-      };
-    }
-
-    const buf = await page.screenshot();
-
-    // Crop to element size (puppeteer's built in implementation caused many
-    // blank screenshots in the past)
-    await sharp(buf)
-      .extract(withContext ? contextBB : adBB)
-      .webp({ lossless: true })
-      .toFile(savePath);
-
-  } catch (e: any) {
-    screenshotFailed = true;
-    log.warning('Couldn\'t capture screenshot: ' + e.message);
+  const abb = await ad.boundingBox();
+  if (!abb) {
+    throw new Error('No ad bounding box');
   }
+  if (abb.height < 30 || abb.width < 30) {
+    throw new Error('Ad smaller than 30px in one dimension');
+  }
+
+  const viewport = page.viewport();
+  if (!viewport) {
+    throw new Error('Page has no viewport');
+  }
+
+  // Round the bounding box values in case they are non-integers
+  let adBB = {
+    left: Math.floor(abb.x),
+    top: Math.floor(abb.y),
+    height: Math.ceil(abb.height),
+    width: Math.ceil(abb.width)
+  }
+
+  // Compute bounding box if a margin is desired
+  const margin = 150;
+  const contextLeft = Math.max(adBB.left - margin, 0);
+  const contextTop = Math.max(adBB.top - margin, 0);
+  const marginTop = adBB.top - contextTop;
+  const marginLeft = adBB.left - contextLeft;
+  const marginBottom = adBB.top + adBB.height + margin < viewport.height
+    ? margin
+    : viewport.height - adBB.height - adBB.top;
+  const marginRight = adBB.left + adBB.width + margin < viewport.width
+    ? margin
+    : viewport.width - adBB.width - adBB.left;
+  const contextWidth = adBB.width + marginLeft + marginRight;
+  const contextHeight = adBB.height + marginTop + marginBottom;
+
+  const contextBB = {
+    left: contextLeft,
+    top: contextTop,
+    height: contextHeight,
+    width: contextWidth
+  };
+  // Recompute ad bounding box within the crop with context
+  if (withContext) {
+    adInContextBB = {
+      left: adBB.left - contextBB.left,
+      top: adBB.top - contextBB.top,
+      height: adBB.height,
+      width: adBB.width
+    };
+  }
+
+  const buf = await page.screenshot();
+
+  // Crop to element size (puppeteer's built in implementation caused many
+  // blank screenshots in the past)
+  await sharp(buf)
+    .extract(withContext ? contextBB : adBB)
+    .webp({ lossless: true })
+    .toFile(savePath);
 
   const prebid = await getPrebidBidsForAd(ad);
 
   return {
     timestamp: new Date(),
-    screenshot: screenshotFailed ? undefined : (realPath ? realPath : savePath),
+    screenshot: screenshotFailed ? undefined : savePath,
     screenshot_host: screenshotFailed ? undefined : screenshotHost,
     html: html,
-    max_bid_price: prebid.max_bid_price,
-    winning_bid: prebid.winning_bid,
+    max_bid_price: prebid?.max_bid_price,
+    winning_bid: prebid?.winning_bid,
     with_context: withContext,
     bb_x: adInContextBB?.left,
     bb_y: adInContextBB?.top,
@@ -337,56 +335,60 @@ async function scrapeAdContent(
  * @param ad The ad to get bid values from.
  */
 function getPrebidBidsForAd(ad: ElementHandle) {
-  return ad.evaluate((ad: Element) => {
-    // Check if the page has prebid
-    // @ts-ignore
-    if (typeof pbjs === 'undefined' || pbjs.getAllWinningBids === undefined) {
-      return { max_bid_price: undefined, winning_bid: undefined };
-    }
+  try {
+    return ad.evaluate((ad: Element) => {
+      // Check if the page has prebid
+      // @ts-ignore
+      if (typeof pbjs === 'undefined' || pbjs.getAllWinningBids === undefined) {
+        return { max_bid_price: undefined, winning_bid: undefined };
+      }
 
-    function isChildOfAd(element: HTMLElement | null) {
-      if (!element) {
-        return false;
-      }
-      if (element === ad) {
-        return true;
-      }
-      let current = element;
-      while (current !== document.body && current.parentNode !== null) {
-        current = current.parentNode as HTMLElement;
+      function isChildOfAd(element: HTMLElement | null) {
+        if (!element) {
+          return false;
+        }
         if (element === ad) {
           return true;
         }
+        let current = element;
+        while (current !== document.body && current.parentNode !== null) {
+          current = current.parentNode as HTMLElement;
+          if (element === ad) {
+            return true;
+          }
+        }
+        return false;
       }
-      return false;
-    }
 
-    // Check if any winning bids match the ad element (or its children).
-    // @ts-ignore
-    const winningBids = pbjs.getAllWinningBids();
-    const matchingWins = winningBids.filter((win: any) => {
-      return isChildOfAd(document.getElementById(win.adUnitCode));
+      // Check if any winning bids match the ad element (or its children).
+      // @ts-ignore
+      const winningBids = pbjs.getAllWinningBids();
+      const matchingWins = winningBids.filter((win: any) => {
+        return isChildOfAd(document.getElementById(win.adUnitCode));
+      });
+      if (matchingWins.length !== 0) {
+        const matchingWin = matchingWins[0];
+        return { max_bid_price: matchingWin.cpm, winning_bid: true };
+      }
+
+      // Check if any other bids match the children
+      // @ts-ignore
+      const bidResponses = pbjs.getBidResponses();
+      const matches = Object.keys(bidResponses).filter(key => {
+        return isChildOfAd(document.getElementById(key));
+      });
+      if (matches.length === 0) {
+        return { max_bid_price: undefined, winning_bid: undefined };
+      }
+      const match = matches[0];
+
+      return {
+        max_bid_price: Math.max(...bidResponses[match].bids.map((b: any) => b.cpm)),
+        winning_bid: false
+      }
     });
-    if (matchingWins.length !== 0) {
-      const matchingWin = matchingWins[0];
-      return { max_bid_price: matchingWin.cpm, winning_bid: true };
-    }
-
-    // Check if any other bids match the children
-    // @ts-ignore
-    const bidResponses = pbjs.getBidResponses();
-    const matches = Object.keys(bidResponses).filter(key => {
-      return isChildOfAd(document.getElementById(key));
-    });
-    if (matches.length === 0) {
-      return { max_bid_price: undefined, winning_bid: undefined };
-    }
-    const match = matches[0];
-
-    return {
-      max_bid_price: Math.max(...bidResponses[match].bids.map((b: any) => b.cpm)),
-      winning_bid: false
-    }
-  });
+  } catch (e: any) {
+    log.warning('Error in Prebid data collection: ' + e.message);
+  }
 }
 

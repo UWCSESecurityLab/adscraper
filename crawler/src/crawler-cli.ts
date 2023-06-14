@@ -19,14 +19,7 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     name: 'job_id',
     alias: 'j',
     type: Number,
-    description: 'ID of the job that is managing this crawl.',
-    group: 'main'
-  },
-  {
-    name: 'max_page_crawl_depth',
-    alias: 'd',
-    type: Number,
-    description: `The maximum depth of pages to crawl. Default = 2`,
+    description: 'ID of the job that is managing this crawl (Optional, required if run via the crawl coordinator)',
     group: 'main'
   },
   {
@@ -36,21 +29,9 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'dataset',
+    name: 'output_dir',
     type: String,
-    description: 'The filename of the dataset the target URL originated from. Default = \'Test\'',
-    group: 'main'
-  },
-  {
-    name: 'screenshot_dir',
-    type: String,
-    description: 'Directory where screenshot files should be saved.',
-    group: 'main'
-  },
-  {
-    name: 'external_screenshot_dir',
-    type: String,
-    description: 'If this crawler is being run inside a Docker container, the directory on the Docker host where the screenshot files are actually saved (in this case, --screenshot_dir should refer to the directory inside the container). (Optional)',
+    description: 'Directory where screenshot, HTML, and MHTML files will be saved.',
     group: 'main'
   },
   {
@@ -100,78 +81,59 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'pg'
   },
   {
-    name: 'label',
-    type: String,
-    description: 'User-supplied label for the input website, e.g. tags for categories of websites. (Optional)',
-    group: 'main'
-  },
-  {
     name: 'headless',
     type: String,
     description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "new".',
-    group: 'options',
+    group: 'chromeOptions',
   },
   {
-    name: 'click_ads',
+    name: 'profile_dir',
     type: String,
-    description: 'Whether to click ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage.',
-    group: 'options'
+    description: 'Directory of the profile (user data directory) that Puppeteer should use for this crawl. Provide this if you want a profile that can be reused between crawls. If not provided (for stateless crawls), uses a new, empty profile.',
+    group: 'chromeOptions'
+  },
+  {
+    name: 'shuffle_crawl_list',
+    type: Boolean,
+    description: 'Include this arg to randomize the order the URLs in the crawl list are visited.',
+    group: 'crawlOptions',
   },
   {
     name: 'crawl_article',
-    alias: 'a',
     type: Boolean,
     description: 'Crawl in article mode: in addition to crawling the home page, crawl the first article in the site\'s RSS feed.',
-    group: 'options'
+    group: 'crawlOptions'
   },
   {
     name: 'crawl_page_with_ads',
     type: Boolean,
     description: 'Crawl page with ads: in addition to crawling the home page, crawl a page on this domain that has ads.',
-    group: 'options'
+    group: 'crawlOptions'
   },
   {
-    name: 'warming_crawl',
-    alias: 'w',
+    name: 'scrape_site',
     type: Boolean,
-    description: 'Crawl in warming mode: reduced sleep and timeouts, skip data collection',
-    group: 'options'
+    description: 'Whether the crawler should scrape the content of the sites in the crawl list.',
+    group: 'scrapeOptions'
   },
   {
-    name: 'disable_all_cookies',
+    name: 'scrape_ads',
     type: Boolean,
-    description: 'Disable all cookies in the browser',
-    group: 'options'
+    description: 'Whether the crawler should scrape the content of ads on the sites in the crawl list.',
+    group: 'scrapeOptions'
   },
   {
-    name: 'disable_third_party_cookies',
-    type: Boolean,
-    description: 'Disable third party cookies and document.cookie',
-    group: 'options'
-  },
-  {
-    name: 'clear_cookies_before_ct',
-    type: Boolean,
-    description: 'Clear browser cookies before clicking ads',
-    group: 'options'
-  },
-  {
-    name: 'skip_crawling_seed_url',
-    type: Boolean,
-    description: 'Skip crawling the seed_url page, and any ads on it. Will still crawl articles if -a is passed.',
-    group: 'options'
+    name: 'click_ads',
+    type: String,
+    description: 'Whether to click ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage. If noClick, no ads will be clicked. If "clickAndBlockLoad", the ads will be clicked, but prevented from loading, and the initial URL of the ad will be stored in the database. If "clickAdAndScrapeLandingPage", ads will be clicked, and the landing page content will be scraped. The --scrape_ads arg must also be used.',
+    group: 'scrapeOptions'
   },
   {
     name: 'screenshot_ads_with_context',
     type: Boolean,
     description: 'When screenshotting ads, include a margin around the ad to provide page context',
     defaultValue: false,
-    group: 'options'
-  },
-  {
-    name: 'user_data_dir',
-    type: String,
-    description: 'Directory of the Chromium profile to use for this crawl. If not provided (for stateless crawls), uses a new, empty profile.'
+    group: 'scrapeOptions'
   },
   {
     name: 'update_crawler_ip_field',
@@ -186,10 +148,10 @@ const options = commandLineArgs(optionsDefinitions)._all;
 const usage = [
   {
     header: 'AdScraper Crawl Worker',
-    content: 'Crawls pages and ads in a puppeteer instance.'
+    content: 'Crawls pages and ads in a Puppeteer instance.'
   },
   {
-    header: 'Crawler Configuration',
+    header: 'Main Options',
     group: 'main',
     optionList: optionsDefinitions
   },
@@ -197,10 +159,19 @@ const usage = [
     header: 'Database Configuration',
     optionList: optionsDefinitions,
     group: 'pg'
+  },{
+    header: 'Puppeteer Options',
+    optionList: optionsDefinitions,
+    group: 'chromeOptions'
   },
   {
     header: 'Crawl Options',
-    group: 'options',
+    group: 'crawlOptions',
+    optionList: optionsDefinitions
+  },
+  {
+    header: 'Scrape Options',
+    group: 'scrapeOptions',
     optionList: optionsDefinitions
   }
 ];
@@ -214,18 +185,14 @@ if (!options.crawl_list) {
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
-if (!options.job_id) {
-  console.log('Missing required parameter: --job_id');
-  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-  process.exit(1);
-}
-if (!options.screenshot_dir) {
-  console.log('Missing required parameter: --screenshot_dir');
+if (!options.output_dir) {
+  console.log('Missing required parameter: --output_dir');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
 if (options.click_ads !== 'noClick' && options.click_ads !== 'clickAndBlockLoad' && options.click_ads !== 'clickAndScrapeLandingPage') {
   console.log('--clickAds must be one of "noClick", "clickAndBlockLoad", or "clickAndScrapeLandingPage"');
+  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
 
@@ -234,10 +201,11 @@ if (options.headless == 'true') {
   headless = true;
 } else if (options.headless == 'false') {
   headless = false;
-} else if (options.headless == 'new') {
+} else if (options.headless == 'new' || options.headless == undefined) {
   headless = 'new';
 } else {
-  console.log('--headless must be "true", "false", or "new"');
+  console.log('Value of --headless must be either "true", "false", or "new"');
+  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
 
@@ -264,25 +232,31 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 (async function() {
   try {
     await crawler.crawl({
-      clearCookiesBeforeCT: options.clear_cookies_before_ct ? true : false,
-      clickAds: options.click_ads,
-      crawlArticle: options.crawl_article ? true : false,
-      crawlerHostname: options.crawler_hostname,
-      crawlList: options.crawl_list as string,
-      crawlPageWithAds: options.crawl_page_with_ads ? true : false,
-      dataset: options.dataset ? options.dataset : 'test',
-      headless: headless,
-      jobId: options.job_id as number,
-      label: options.label,
-      maxPageCrawlDepth: options.max_page_crawl_depth !== undefined ? options.max_page_crawl_depth as number : 2,
+      jobId: options.job_id,
+      outputDir: options.output_dir,
       pgConf: pgConf,
-      screenshotAdsWithContext: options.screenshot_ads_with_context as boolean,
-      screenshotDir: options.screenshot_dir as string,
-      externalScreenshotDir: options.external_screenshot_dir as string | undefined,
-      skipCrawlingSeedUrl: options.skip_crawling_seed_url ? true : false,
-      warmingCrawl: options.warming_crawl ? true : false,
-      userDataDir: options.user_data_dir,
-      updateCrawlerIpField: options.update_crawler_ip_field as boolean
+      crawlerHostname: options.crawler_hostname,
+      crawlListFile: options.crawl_list as string,
+
+      chromeOptions: {
+        headless: headless,
+        profileDir: options.profile_dir,
+      },
+
+      crawlOptions: {
+        shuffleCrawlList: Boolean(options.shuffleCrawlList),
+        crawlAdditionalArticlePage: Boolean(options.crawl_article),
+        crawlAdditionalPageWithAds: Boolean(options.crawl_page_with_ads),
+      },
+
+      scrapeOptions: {
+        scrapeSite: Boolean(options.scrape_site),
+        scrapeAds: Boolean(options.scrape_ads),
+        clickAds: options.click_ads,
+        screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
+      },
+
+      updateCrawlerIpField: Boolean(options.update_crawler_ip_field)
     });
     log.info('Crawl succeeded');
     process.exit(0);
