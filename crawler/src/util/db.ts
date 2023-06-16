@@ -12,14 +12,15 @@ export interface dbInsertOptions {
 }
 
 export interface Ad {
+  job_id: number,
   timestamp: Date,
+  url?: string,
   html: string
   screenshot?: string,
   screenshot_host?: string,
-  selectors?: string,
-  parent_page?: number,
-  // depth: number,
-  job_id: number,
+  parent_page: number,
+  parent_page_url: string,
+  parent_page_type: string,
   chumbox_id?: number,
   platform?: string,
   winning_bid?: boolean,
@@ -42,14 +43,15 @@ export interface AdDomain {
 export interface Page {
   timestamp: Date,
   url: string,
-  html: string
-  screenshot: string,
-  screenshot_host: string,
-  // depth: number,
+  crawl_list_url: string,
+  html?: string
+  screenshot?: string,
+  screenshot_host?: string,
   page_type: string,
   job_id: number,
   crawl_id: number,
   referrer_page?: number,
+  referrer_page_url?: string,
   referrer_ad?: number
 }
 

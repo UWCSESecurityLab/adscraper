@@ -10,11 +10,14 @@ import DbClient from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout } from './util/timeout.js';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
+import path from 'path';
 
 sourceMapSupport.install();
 
 export interface CrawlerFlags {
+  name?: string,
   jobId: number,
+  crawlId: number,
   outputDir: string,
   pgConf: ClientConfig,
   crawlerHostname: string,
@@ -37,8 +40,6 @@ export interface CrawlerFlags {
     clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage',
     screenshotAdsWithContext: boolean
   }
-
-  updateCrawlerIpField: boolean
 };
 
 declare global {
@@ -105,8 +106,42 @@ export async function crawl(flags: CrawlerFlags) {
 
   const db = await DbClient.initialize(FLAGS.pgConf);
 
-  if (FLAGS.updateCrawlerIpField) {
-    await setCrawlerIpField(FLAGS.jobId);
+  // Set up crawl entry, or resume from previous.
+  let crawlId: number;
+  let crawlListStartingIndex = 0;
+  if (!FLAGS.crawlId) {
+    crawlId = await db.insert({
+      table: 'crawl',
+      returning: 'id',
+      data: {
+        job_id: FLAGS.jobId,
+        name: FLAGS.name,
+        start_time: new Date(),
+        completed: false,
+        crawl_list: path.basename(FLAGS.crawlListFile),
+        crawl_list_current_index: 0,
+        crawl_list_length: crawlList.length,
+        profile_dir: FLAGS.chromeOptions.profileDir,
+        crawler_hostname: FLAGS.crawlerHostname,
+        crawler_ip: await getPublicIp()
+      }
+    }) as number;
+  } else {
+    const prevCrawl = await db.postgres.query('SELECT crawl_list, crawl_list_current_index FROM crawl WHERE id=$1', [FLAGS.crawlId]);
+    if (prevCrawl.rowCount !== 1) {
+      console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
+      process.exit(1);
+    }
+    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {
+      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.crawlListFile}`);
+      process.exit(1);
+    }
+    if (prevCrawl.rows[0].crawl_list_length !== crawlList.length) {
+      console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
+      process.exit(1);
+    }
+    crawlId = FLAGS.crawlId;
+    crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
   }
 
   // Open browser
@@ -121,70 +156,66 @@ export async function crawl(flags: CrawlerFlags) {
 
   log.info('Running ' + version);
 
-  // Main loop through crawl list
-  for (let url of crawlList) {
-    // Set overall timeout for this crawl list item
-    let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
-      `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
+  try {
+    // Main loop through crawl list
+    for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
+      const url = crawlList[i];
+      // Set overall timeout for this crawl list item
+      let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
+        `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
 
-    let seedPage = await BROWSER.newPage();
+      let seedPage = await BROWSER.newPage();
 
-    try {
-      let _crawl = (async () => {
-        // Insert record for this crawl list item
-        try {
-          let crawlId: number;
-          crawlId = await db.insert({
-            table: 'crawl',
-            returning: 'id',
-            data: {
-              timestamp: new Date(),
-              job_id: FLAGS.jobId,
-              seed_url: url,
+      try {
+        let _crawl = (async () => {
+          // Insert record for this crawl list item
+          try {
+            // Open the URL and scrape it (if specified)
+            const pageId = await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId);
+
+            // Open additional pages (if specified) and scrape them (if specified)
+            if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
+              const articleUrl = await findArticle(seedPage);
+              if (articleUrl) {
+                const articlePage = await BROWSER.newPage();
+                await loadAndHandlePage(articleUrl, articlePage, PageType.SUBPAGE, crawlId, pageId, seedPage.url());
+                await articlePage.close();
+              } else {
+                log.strError(`${url}: Couldn't find article`);
+              }
             }
-          }) as number;
 
-          // Open the URL and scrape it (if specified)
-          await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId);
-
-          // Open additional pages (if specified) and scrape them (if specified)
-          if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
-            const article = await findArticle(seedPage);
-            if (article) {
-              const articlePage = await BROWSER.newPage();
-              await loadAndHandlePage(url, articlePage, PageType.SUBPAGE, crawlId);
-              await articlePage.close();
-            } else {
-              log.strError(`${url}: Couldn't find article`);
+            if (FLAGS.crawlOptions.crawlAdditionalPageWithAds) {
+              const urlWithAds = await findPageWithAds(seedPage);
+              if (urlWithAds) {
+                const adsPage = await BROWSER.newPage();
+                await loadAndHandlePage(urlWithAds, adsPage, PageType.SUBPAGE, crawlId, pageId, seedPage.url());
+                await adsPage.close();
+              } else {
+                log.strError(`${url}: Couldn't find article`);
+              }
             }
+          } catch (e: any) {
+            log.error(e);
+            throw e;
+          } finally {
+            clearTimeout(urlTimeoutId);
           }
-
-          if (FLAGS.crawlOptions.crawlAdditionalPageWithAds) {
-            const urlWithAds = await findPageWithAds(seedPage);
-            if (urlWithAds) {
-              const adsPage = await BROWSER.newPage();
-              await loadAndHandlePage(url, adsPage, PageType.SUBPAGE, crawlId);
-              await adsPage.close();
-            } else {
-              log.strError(`${url}: Couldn't find article`);
-            }
-          }
-        } catch (e: any) {
-          log.error(e);
-          throw e;
-        } finally {
-          clearTimeout(urlTimeoutId);
-        }
-      })();
-      await Promise.race([_crawl, urlTimeout]);
-    } catch (e: any) {
-      log.error(e);
-    } finally {
-      await seedPage.close();
+        })();
+        await Promise.race([_crawl, urlTimeout]);
+      } catch (e: any) {
+        log.error(e);
+      } finally {
+        await seedPage.close();
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i, crawlId])
+      }
     }
+    await BROWSER.close();
+    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=NOW() WHERE id=$1', [crawlId]);
+  } catch (e) {
+    await BROWSER.close();
+    throw e;
   }
-  await BROWSER.close();
-  log.info('Crawler instance completed');
 }
 
 /**
@@ -193,10 +224,14 @@ export async function crawl(flags: CrawlerFlags) {
  * @param page Tab/Page that the URL should be visited in
  * @param pageType Whether the URL is the one in the crawl list, or an
  * additional URL that was found from a link on the initial page.
+ * @param referrerPageId The page id of the page that this URL came from,
+ * if this is a subpage of the crawl list page.
+ * @param referrerPageUrl: The URL of the page that this URL came from.
+ * if this is a subpage of the crawl list page.
  * @param crawlId ID of the crawl
  */
 async function loadAndHandlePage(url: string, page: Page, pageType:
-    PageType, crawlId: number) {
+    PageType, crawlId: number, referrerPageId?: number, referrerPageUrl?: string) {
   log.info(`${url}: loading page`);
   if (FLAGS.scrapeOptions.scrapeAds) {
     await domMonitor.injectDOMListener(page);
@@ -204,36 +239,37 @@ async function loadAndHandlePage(url: string, page: Page, pageType:
   await page.goto(url, { timeout: 60000 });
 
   // Crawl the page
-  let pageId: number | undefined;
+  let pageId: number;
   if (FLAGS.scrapeOptions.scrapeSite) {
     pageId = await scrapePage(page, {
+      crawlListUrl: url,
       pageType: pageType,
       crawlId: crawlId
+    });
+  } else {
+    // If we're not scraping page, still create a database entry (without)
+    // any of the scraped contents
+    const db = DbClient.getInstance();
+    pageId = await db.archivePage({
+      job_id: FLAGS.jobId,
+      crawl_id: crawlId,
+      timestamp: new Date(),
+      url: page.url(),
+      crawl_list_url: url,
+      page_type: pageType,
+      referrer_page: referrerPageId,
+      referrer_page_url: referrerPageUrl
     });
   }
   if (FLAGS.scrapeOptions.scrapeAds) {
     await scrapeAdsOnPage(page, {
       crawlId: crawlId,
-      parentPageId: pageId,
+      crawlListUrl: url,
       pageType: pageType,
+      parentPageId: pageId,
     });
   }
-}
-
-async function setCrawlerIpField(jobId: number) {
-  const dbClient = DbClient.getInstance();
-  try {
-    const ip = await getPublicIp();
-    if (!ip) {
-      console.log('Couldn\'t find public IP address');
-      return;
-    }
-    console.log(ip)
-    await dbClient.postgres.query('UPDATE job SET crawler_ip=$1 WHERE id=$2;', [ip, jobId]);
-    console.log('updated ip');
-  } catch (e) {
-    console.log(e);
-  }
+  return pageId;
 }
 
 async function getPublicIp() {

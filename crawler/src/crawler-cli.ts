@@ -16,13 +16,6 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'job_id',
-    alias: 'j',
-    type: Number,
-    description: 'ID of the job that is managing this crawl (Optional, required if run via the crawl coordinator)',
-    group: 'main'
-  },
-  {
     name: 'crawl_list',
     type: String,
     description: 'A file containing URLs to crawl, one URL per line',
@@ -35,9 +28,28 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
+    name: 'name',
+    type: String,
+    description: 'Name of this crawl, for your reference. (Optional)',
+    group: 'main',
+  },
+  {
+    name: 'crawl_id',
+    type: Number,
+    description: 'If resuming a previous crawl, the id of the previous crawl (Optional).',
+    group: 'main'
+  },
+  {
+    name: 'job_id',
+    alias: 'j',
+    type: Number,
+    description: 'ID of the job that is managing this crawl (Optional, required if run via the crawl coordinator)',
+    group: 'main'
+  },
+  {
     name: 'crawler_hostname',
     type: String,
-    description: 'The hostname of this crawler. Defaults to "os.hostname()", but if this crawler is being run in a Docker container, you must manually supply the hostname of the Docker host to correctly tag screenshots.',
+    description: 'The hostname of this crawler (Optional). Defaults to "os.hostname()", but if this crawler is being run in a Docker container, you must manually supply the hostname of the Docker host to correctly tag screenshots.',
     defaultValue: os.hostname(),
     group: 'main'
   },
@@ -83,13 +95,14 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'headless',
     type: String,
-    description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "new".',
+    description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "new". (Default: new)',
+    defaultValue: "new",
     group: 'chromeOptions',
   },
   {
     name: 'profile_dir',
     type: String,
-    description: 'Directory of the profile (user data directory) that Puppeteer should use for this crawl. Provide this if you want a profile that can be reused between crawls. If not provided (for stateless crawls), uses a new, empty profile.',
+    description: 'Directory of the profile (user data directory) that Puppeteer should use for this crawl (Optional). Provide this if you want a profile that can be reused between crawls. If not provided (for stateless crawls), uses a new, empty profile.',
     group: 'chromeOptions'
   },
   {
@@ -101,46 +114,40 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'crawl_article',
     type: Boolean,
-    description: 'Crawl in article mode: in addition to crawling the home page, crawl the first article in the site\'s RSS feed.',
+    description: 'Crawl in article mode: if included, in addition to crawling the home page, crawl the first article in the site\'s RSS feed.',
     group: 'crawlOptions'
   },
   {
     name: 'crawl_page_with_ads',
     type: Boolean,
-    description: 'Crawl page with ads: in addition to crawling the home page, crawl a page on this domain that has ads.',
+    description: 'Crawl page with ads: if included, in addition to crawling the home page, crawl a page on this domain that has ads.',
     group: 'crawlOptions'
   },
   {
     name: 'scrape_site',
     type: Boolean,
-    description: 'Whether the crawler should scrape the content of the sites in the crawl list.',
+    description: 'If included, the crawler will scrape the content of the sites in the crawl list.',
     group: 'scrapeOptions'
   },
   {
     name: 'scrape_ads',
     type: Boolean,
-    description: 'Whether the crawler should scrape the content of ads on the sites in the crawl list.',
+    description: 'If included, the crawler will scrape the content of ads on the sites in the crawl list.',
     group: 'scrapeOptions'
   },
   {
     name: 'click_ads',
     type: String,
-    description: 'Whether to click ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage. If noClick, no ads will be clicked. If "clickAndBlockLoad", the ads will be clicked, but prevented from loading, and the initial URL of the ad will be stored in the database. If "clickAdAndScrapeLandingPage", ads will be clicked, and the landing page content will be scraped. The --scrape_ads arg must also be used.',
+    description: 'Specify whether to click on ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage. If noClick, no ads will be clicked. If "clickAndBlockLoad", the ads will be clicked, but prevented from loading, and the initial URL of the ad will be stored in the database. If "clickAdAndScrapeLandingPage", ads will be clicked, and the landing page content will be scraped. The --scrape_ads arg must also be used. Default: "noClick"',
+    defaultValue: 'noClick',
     group: 'scrapeOptions'
   },
   {
     name: 'screenshot_ads_with_context',
     type: Boolean,
-    description: 'When screenshotting ads, include a margin around the ad to provide page context',
+    description: 'If included, when screenshotting ads, includes a 150px margin around the ad to provide context of where it is on the page.',
     defaultValue: false,
     group: 'scrapeOptions'
-  },
-  {
-    name: 'update_crawler_ip_field',
-    type: Boolean,
-    description: 'Update the crawler_ip field in the job table (use this flag on the first crawler when performing a crawl using the dockerized VPN).',
-    defaultValue: false,
-    group: 'options'
   }
 ];
 
@@ -232,11 +239,13 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 (async function() {
   try {
     await crawler.crawl({
+      name: options.name,
       jobId: options.job_id,
       outputDir: options.output_dir,
       pgConf: pgConf,
       crawlerHostname: options.crawler_hostname,
-      crawlListFile: options.crawl_list as string,
+      crawlListFile: options.crawl_list,
+      crawlId: options.crawl_id,
 
       chromeOptions: {
         headless: headless,
@@ -255,8 +264,6 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         clickAds: options.click_ads,
         screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
       },
-
-      updateCrawlerIpField: Boolean(options.update_crawler_ip_field)
     });
     log.info('Crawl succeeded');
     process.exit(0);

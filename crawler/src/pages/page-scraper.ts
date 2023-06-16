@@ -7,6 +7,7 @@ import { createAsyncTimeout, sleep } from '../util/timeout.js';
 import DbClient from '../util/db.js';
 import urlToPathSafeStr from '../util/urlToPathSafeStr.js';
 import fs from 'fs';
+import getCrawlOutputDirectory from '../util/getCrawlOutputDirectory.js';
 
 export enum PageType {
   MAIN = 'main',  // The URL specified in the crawl list
@@ -27,16 +28,19 @@ interface ScrapedPage {
  * @property pageType: Type of page (e.g. home page, article)
  * @property currentDepth: The depth of the crawl at the current page.
  * @property crawlId: The database id of this crawl job.
- * @property referrerPage: If this is a clickthrough page, the id of the page
+ * @property crawlListUrl: The original URL in the crawl list that spawned this page.
+ * @property referrerPage: If this is a subpage or clickthrough page, the id of the page
  * page that linked to this page.
+ * @property referrerPageUrl: URL of the referrerPage.
  * @property referrerAd: If this is a clickthrough page, the id of the ad
  * that linked to this page.
  */
 interface ScrapePageMetadata {
   pageType: PageType,
-  // currentDepth: number,
   crawlId: number,
+  crawlListUrl: string,
   referrerPage?: number,
+  referrerPageUrl?: string,
   referrerAd?: number
 }
 
@@ -59,8 +63,7 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
       let pageId = -1;
 
       const pagesDir = path.join(
-        FLAGS.outputDir,
-        'job_' + FLAGS.jobId.toString(),
+        getCrawlOutputDirectory(metadata.crawlId),
         'scraped_pages',
         urlToPathSafeStr(page.url())
       );
@@ -74,11 +77,12 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
         FLAGS.crawlerHostname);
 
       pageId = await db.archivePage({
-        crawl_id: metadata.crawlId,
         job_id: FLAGS.jobId,
+        crawl_id: metadata.crawlId,
         page_type: metadata.pageType,
-        // depth: metadata.currentDepth,
+        crawl_list_url: metadata.crawlListUrl,
         referrer_page: metadata.referrerPage,
+        referrer_page_url: metadata.referrerPageUrl,
         referrer_ad: metadata.referrerAd,
         ...scrapedPage
       });

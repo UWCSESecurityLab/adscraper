@@ -14,6 +14,7 @@ import { splitChumbox } from './chumbox-handler.js';
 import { clickAd } from './click.js';
 import { matchDOMUpdateToAd } from './dom-monitor.js';
 import { scrapeIFramesInElement } from './iframe-scraper.js';
+import getCrawlOutputDirectory from '../util/getCrawlOutputDirectory.js';
 
 // Handle to an ad. We store two handles: the screenshot target, which
 // is the entire area of the ad, and the click target, which is the region
@@ -30,7 +31,6 @@ interface ScrapedAd {
   html: string
   screenshot?: string,
   screenshot_host?: string,
-  selectors?: string,
   winning_bid?: boolean,
   max_bid_price?: number
   with_context: boolean,
@@ -44,15 +44,15 @@ interface ScrapedAd {
  * Crawler metadata to be stored with scraped ad data.
  * @property crawlId: id of the current crawl list entry
  * @property pageType: Type of the parent page
- * @property parentPageId: The database id of the page the ad appears on, if it was scraped
+ * @property parentPageId: The database id of the page the ad appears on
  * @property chumboxId: The chumbox the ad belongs to, if applicable
  * @property platform: The ad platform used by this ad, if identified
  */
 interface CrawlAdMetadata {
   crawlId: number,
   pageType: PageType,
-  parentPageId?: number,
-  // parentDepth: number,
+  parentPageId: number,
+  crawlListUrl: string,
   chumboxId?: number,
   platform?: string
 }
@@ -101,6 +101,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
           crawlId: metadata.crawlId,
           pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
+          crawlListUrl: metadata.crawlListUrl,
           chumboxId: chumboxId,
           platform: platform
         });
@@ -131,6 +132,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
             metadata.crawlId,
             adId,
             metadata.parentPageId,
+            metadata.crawlListUrl
           );
         }
       } catch (e) {
@@ -175,8 +177,7 @@ export async function scrapeAd(ad: ElementHandle,
       await sleep(AD_SLEEP_TIME);
 
       const adsDir = path.join(
-        FLAGS.outputDir,
-        'job_' + FLAGS.jobId.toString(),
+        getCrawlOutputDirectory(metadata.crawlId),
         'scraped_ads',
         urlToPathSafeStr(page.url())
       );
@@ -193,6 +194,8 @@ export async function scrapeAd(ad: ElementHandle,
       const adId = await db.archiveAd({
         job_id: FLAGS.jobId,
         parent_page: metadata.parentPageId,
+        parent_page_url: page.url(),
+        parent_page_type: metadata.pageType,
         chumbox_id: metadata.chumboxId,
         platform: metadata.platform,
         ...adContent
@@ -266,8 +269,8 @@ async function scrapeAdContent(
 
   // Round the bounding box values in case they are non-integers
   let adBB = {
-    left: Math.floor(abb.x),
-    top: Math.floor(abb.y),
+    left: Math.max(0, Math.floor(abb.x)),
+    top: Math.max(0, Math.floor(abb.y)),
     height: Math.ceil(abb.height),
     width: Math.ceil(abb.width)
   }
