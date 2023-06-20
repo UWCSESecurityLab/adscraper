@@ -127,7 +127,7 @@ export async function crawl(flags: CrawlerFlags) {
       }
     }) as number;
   } else {
-    const prevCrawl = await db.postgres.query('SELECT crawl_list, crawl_list_current_index FROM crawl WHERE id=$1', [FLAGS.crawlId]);
+    const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE id=$1', [FLAGS.crawlId]);
     if (prevCrawl.rowCount !== 1) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
