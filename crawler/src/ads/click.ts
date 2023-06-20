@@ -53,7 +53,9 @@ export function clickAd(
       // Create timeout for processing overall clickthrough (including the landing page).
       // If it takes longer than this, abort handling this ad.
       const timeout = setTimeout(async () => {
-        ctPage?.close();
+        if (ctPage && !ctPage.isClosed()) {
+          await ctPage?.close();
+        }
         await cleanUp();
         reject(new Error(`${page.url()}: Clickthrough timed out - ${CLICKTHROUGH_TIMEOUT}ms`));
       }, CLICKTHROUGH_TIMEOUT);
@@ -61,7 +63,9 @@ export function clickAd(
       // Create timeout for the click. If the click fails to do anything,
       // abort handing this ad.
       const clickTimeout = setTimeout(async () => {
-        ctPage?.close();
+        if (ctPage && !ctPage.isClosed()) {
+          await ctPage?.close();
+        }
         await cleanUp();
         reject(new Error(`${page.url()}: Ad click timed out - ${AD_CLICK_TIMEOUT}ms`));
       }, AD_CLICK_TIMEOUT)
@@ -75,7 +79,7 @@ export function clickAd(
         // (iframes can also trigger this event).
         if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
           // Stop the navigation from happening.
-          req.abort('aborted');
+          await req.abort('aborted');
           clearTimeout(clickTimeout);
 
           // Save the ad URL in the database.
@@ -115,8 +119,12 @@ export function clickAd(
             }
           }
         } else {
-          // Allow other unrelated requests through
-          req.continue();
+          try {
+            // Allow other unrelated requests through
+            await req.continue();
+          } catch (e: any) {
+            log.warning(e);
+          }
         }
       });
 
@@ -226,7 +234,9 @@ export function clickAd(
             } catch (e) {
               reject(e);
             } finally {
-              await newPage.close();
+              if (!newPage.isClosed()) {
+                await newPage.close();
+              }
               await cleanUp();
             }
           });
@@ -240,7 +250,9 @@ export function clickAd(
       // Attempt to use the built-in puppeteer click.
       await ad.click({ delay: 10 });
     } catch (e) {
-      reject(e);''
+      reject(e);
+      page.removeAllListeners();
+      await page.setRequestInterception(false);
     }
   });
 }

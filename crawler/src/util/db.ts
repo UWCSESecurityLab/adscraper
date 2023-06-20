@@ -21,6 +21,7 @@ export interface dbUpdateOptions {
 
 export interface Ad {
   job_id?: number,
+  crawl_id: number,
   timestamp?: Date,
   url?: string,
   html?: string

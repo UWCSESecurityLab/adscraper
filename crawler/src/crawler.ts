@@ -1,7 +1,9 @@
 import fs from 'fs';
 import { ClientConfig } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
-import puppeteer, { Browser, Page } from 'puppeteer';
+import puppeteerExtra from 'puppeteer-extra';
+import { Browser, Page } from 'puppeteer';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
 import * as domMonitor from './ads/dom-monitor.js';
 import { findArticle, findPageWithAds } from './pages/find-page.js';
@@ -22,6 +24,7 @@ export interface CrawlerFlags {
   pgConf: ClientConfig,
   crawlerHostname: string,
   crawlListFile: string,
+  // crawlPrevAdLandingPages?: number
 
   chromeOptions: {
     profileDir?: string,
@@ -63,7 +66,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
   // How long the crawler can spend on each clickthrough page
   globalThis.CLICKTHROUGH_TIMEOUT = 30 * 1000;  // 30s
   // How long the crawler should wait for something to happen after clicking an ad
-  globalThis.AD_CLICK_TIMEOUT = 5 * 1000;  // 5s
+  globalThis.AD_CLICK_TIMEOUT = 10 * 1000;  // 10s
   // How long the crawler can spend waiting for the HTML of a page.
   globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;  // 1min
   // How long the crawler can spend waiting for the HTML and screenshot of an ad.
@@ -78,33 +81,46 @@ function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
 }
 
 export async function crawl(flags: CrawlerFlags) {
+  // if (!flags.crawlListFile && !flags.crawlPrevAdLandingPages) {
+  //   console.log('Must specific either --crawl_list or --crawl_prev_ad_landing_pages')
+  // }
+
   // Validate arguments
   if (!fs.existsSync(flags.outputDir)) {
     console.log(`${flags.outputDir} is not a valid directory`);
     process.exit(1);
   }
 
-  if (!fs.existsSync(flags.crawlListFile)) {
-    console.log(`${flags.crawlListFile} does not exist.`);
-    process.exit(1);
-  }
+  const db = await DbClient.initialize(flags.pgConf);
 
-  const crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
-  let i = 1;
-  for (let url of crawlList) {
-    try {
-      new URL(url);
-    } catch (e) {
-      console.log(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
+  let crawlList: string[] = [];
+  let crawlListAdIds: number[] = [];
+
+  // if (flags.crawlListFile) {
+    if (!fs.existsSync(flags.crawlListFile)) {
+      console.log(`${flags.crawlListFile} does not exist.`);
       process.exit(1);
     }
-  }
+
+    crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
+    let i = 1;
+    for (let url of crawlList) {
+      try {
+        new URL(url);
+      } catch (e) {
+        console.log(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
+        process.exit(1);
+      }
+    }
+  // } else if (flags.crawlPrevAdLandingPages) {
+  //   const landingPages = await db.postgres.query(`SELECT id, url FROM ad WHERE crawl_id=$1 AND url IS NOT NULL`, [flags.crawlPrevAdLandingPages])
+  //   crawlListAdIds = landingPages.rows.map(row => row.id);
+  //   crawlList = landingPages.rows.map(row => row.url);
+  // }
 
   // Initialize global variables and clients
   console.log(flags);
   setupGlobals(flags, crawlList);
-
-  const db = await DbClient.initialize(FLAGS.pgConf);
 
   // Set up crawl entry, or resume from previous.
   let crawlId: number;
@@ -118,7 +134,7 @@ export async function crawl(flags: CrawlerFlags) {
         name: FLAGS.name,
         start_time: new Date(),
         completed: false,
-        crawl_list: path.basename(FLAGS.crawlListFile),
+        crawl_list: FLAGS.crawlListFile, // path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : `Crawl ${FLAGS.crawlPrevAdLandingPages} landing pages` ),
         crawl_list_current_index: 0,
         crawl_list_length: crawlList.length,
         profile_dir: FLAGS.chromeOptions.profileDir,
@@ -132,7 +148,7 @@ export async function crawl(flags: CrawlerFlags) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {
+    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {// (FLAGS.crawlListFile ? path.basename(FLAGS.crawlListFile) : `Crawl ${FLAGS.crawlPrevAdLandingPages} landing pages`)) {
       console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.crawlListFile}`);
       process.exit(1);
     }
@@ -146,7 +162,10 @@ export async function crawl(flags: CrawlerFlags) {
 
   // Open browser
   log.info('Launching browser...');
-  globalThis.BROWSER = await puppeteer.launch({
+
+  puppeteerExtra.default.use(StealthPlugin())
+
+  globalThis.BROWSER = await puppeteerExtra.default.launch({
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
     headless: FLAGS.chromeOptions.headless,
@@ -167,6 +186,8 @@ export async function crawl(flags: CrawlerFlags) {
     // Main loop through crawl list
     for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
       const url = crawlList[i];
+      // let prevAdId = FLAGS.crawlPrevAdLandingPages ? crawlListAdIds[i] : -1;
+
       // Set overall timeout for this crawl list item
       let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
         `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
@@ -178,7 +199,7 @@ export async function crawl(flags: CrawlerFlags) {
           // Insert record for this crawl list item
           try {
             // Open the URL and scrape it (if specified)
-            const pageId = await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId);
+            const pageId = await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId) //, undefined, undefined, FLAGS.crawlPrevAdLandingPages ? prevAdId : undefined);
 
             // Open additional pages (if specified) and scrape them (if specified)
             if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
@@ -218,7 +239,7 @@ export async function crawl(flags: CrawlerFlags) {
       }
     }
     await BROWSER.close();
-    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=NOW() WHERE id=$1', [crawlId]);
+    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(),crawlId]);
   } catch (e) {
     await BROWSER.close();
     throw e;
@@ -238,22 +259,24 @@ export async function crawl(flags: CrawlerFlags) {
  * @param crawlId ID of the crawl
  */
 async function loadAndHandlePage(url: string, page: Page, pageType:
-    PageType, crawlId: number, referrerPageId?: number, referrerPageUrl?: string) {
+    PageType, crawlId: number, referrerPageId?: number, referrerPageUrl?: string, referrerAd?: number) {
   log.info(`${url}: loading page`);
   if (FLAGS.scrapeOptions.scrapeAds) {
     await domMonitor.injectDOMListener(page);
   }
-  await page.goto(url, { timeout: 60000 });
+  await page.goto(url, { timeout: 120000 });
 
   await scrollDownPage(page);
 
   // Crawl the page
+  // TODO: if referrer ad is passed, call with landing page pagetype
   let pageId: number;
   if (FLAGS.scrapeOptions.scrapeSite) {
     pageId = await scrapePage(page, {
       crawlListUrl: url,
       pageType: pageType,
       crawlId: crawlId
+      // referrerAd: referrerAd,
     });
   } else {
     // If we're not scraping page, still create a database entry (without)

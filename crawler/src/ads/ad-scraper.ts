@@ -7,7 +7,6 @@ import { PageType } from '../pages/page-scraper.js';
 import DbClient from '../util/db.js';
 import * as log from '../util/log.js';
 import { createAsyncTimeout, sleep } from '../util/timeout.js';
-import urlToPathSafeStr from '../util/urlToPathSafeStr.js';
 import { identifyAdsInDOM } from './ad-detection.js';
 import { extractExternalUrls } from './ad-external-urls.js';
 import { splitChumbox } from './chumbox-handler.js';
@@ -202,6 +201,7 @@ export async function scrapeAd(ad: ElementHandle,
 
       await db.updateAd(adId, {
         job_id: FLAGS.jobId,
+        crawl_id: metadata.crawlId,
         parent_page: metadata.parentPageId,
         parent_page_url: page.url(),
         parent_page_type: metadata.pageType,
