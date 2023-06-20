@@ -11,21 +11,29 @@ export interface dbInsertOptions {
   }
 }
 
+export interface dbUpdateOptions {
+  table: string,
+  id: number,
+  data: {
+    [column: string]: any
+  }
+}
+
 export interface Ad {
-  job_id: number,
-  timestamp: Date,
+  job_id?: number,
+  timestamp?: Date,
   url?: string,
-  html: string
+  html?: string
   screenshot?: string,
   screenshot_host?: string,
-  parent_page: number,
-  parent_page_url: string,
-  parent_page_type: string,
+  parent_page?: number,
+  parent_page_url?: string,
+  parent_page_type?: string,
   chumbox_id?: number,
   platform?: string,
   winning_bid?: boolean,
   max_bid_price?: number
-  with_context: boolean,
+  with_context?: boolean,
   bb_x?: number,
   bb_y?: number,
   bb_height?: number,
@@ -109,28 +117,39 @@ export default class DbClient {
    * @returns
    */
   async insert(options: dbInsertOptions) {
-    try {
-      const columns = Object.keys(options.data).join(', ');
-      const valuesStr = [...Array(Object.keys(options.data).length).keys()]
-          .map((v) => `$${v+1}`).join(', ');
-      const params = Object.values(options.data);
+    const columns = Object.keys(options.data).join(', ');
+    const valuesStr = [...Array(Object.keys(options.data).length).keys()]
+        .map((v) => `$${v+1}`).join(', ');
+    const params = Object.values(options.data);
 
-      let insert = `INSERT INTO ${options.table} (${columns}) VALUES (${valuesStr})`;
-      if (options.returning) {
-        insert += ` RETURNING ${options.returning}`;
-      }
-      insert += ';';
+    let insert = `INSERT INTO ${options.table} (${columns}) VALUES (${valuesStr})`;
+    if (options.returning) {
+      insert += ` RETURNING ${options.returning}`;
+    }
+    insert += ';';
 
-      const result = await this.postgres.query(insert, params);
-      if (!options.returning) {
-        return;
-      }
-      if (result.rowCount !== 1) {
-        throw new Error('Insert query didn\'t return a value');
-      }
-      return result.rows[0][options.returning];
-    } catch(e) {
-      throw e;
+    const result = await this.postgres.query(insert, params);
+    if (!options.returning) {
+      return;
+    }
+    if (result.rowCount !== 1) {
+      throw new Error('Insert query didn\'t return a value');
+    }
+    return result.rows[0][options.returning];
+  }
+
+  async updateById(options: dbUpdateOptions) {
+    const columns = Object.keys(options.data)
+        .map((col, idx) => `${col}=$${idx+1}`)
+        .join(', ');
+    const params = Object.values(options.data);
+    params.push(options.id);
+    const update = `UPDATE ${options.table} SET ${columns} WHERE id=$${params.length}`;
+    const result = await this.postgres.query(update, params);
+    if (result.rowCount == 0) {
+      log.warning(`Could not update row in table ${options.table} with id ${options.id}`);
+    } else if (result.rowCount > 1) {
+      log.warning(`Updated more than one row in ${options.table} with id ${options.id}`);
     }
   }
 
@@ -161,41 +180,43 @@ export default class DbClient {
     }
   }
 
-  async archiveAd(ad: Ad) {
-    try {
-      const adId = await this.insert({
-        table: 'ad',
-        returning: 'id',
-        data: ad
-      }) as number;
-      return adId;
-    } catch (e) {
-      throw e;
-    }
+  async createAd(ad: Ad) {
+    const adId = await this.insert({
+      table: 'ad',
+      returning: 'id',
+      data: ad
+    }) as number;
+    return adId;
+  }
+
+  async createEmptyAd() {
+    const result = await this.postgres.query(
+      'INSERT INTO ad DEFAULT VALUES RETURNING id');
+    return result.rows[0].id as number;
+  }
+
+  async updateAd(id: number, ad: Ad) {
+    return this.updateById({
+      table: 'ad',
+      id: id,
+      data: ad
+    });
   }
 
   async archivePage(page: Page): Promise<number> {
-    try {
-      const pageId = await this.insert({
-        table: 'page',
-        returning: 'id',
-        data: page
-      }) as number;
-      return pageId;
-    } catch (e) {
-      throw e;
-    }
+    const pageId = await this.insert({
+      table: 'page',
+      returning: 'id',
+      data: page
+    }) as number;
+    return pageId;
   }
 
   async insertAdDomain(adDomain: AdDomain) {
-    try {
-      this.insert({
-        table: 'ad_domain',
-        data: adDomain
-      });
-    } catch (e) {
-      throw(e);
-    }
+    this.insert({
+      table: 'ad_domain',
+      data: adDomain
+    });
   }
 
   async archiveExternalUrls(externals: AdExternalUrls, adId: number, iframeId?: number) {

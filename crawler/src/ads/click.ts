@@ -3,6 +3,7 @@ import * as log from '../util/log.js';
 import { injectDOMListener } from "./dom-monitor.js";
 import { PageType, scrapePage } from "../pages/page-scraper.js";
 import DbClient from "../util/db.js";
+import { sleep } from "../util/timeout.js";
 
 /**
  * Clicks on an ad, and starts a crawl on the page that it links to.
@@ -94,6 +95,7 @@ export function clickAd(
           try {
             ctPage = newPage;
             await newPage.goto(req.url(), { referer: req.headers().referer });
+            await sleep(5000);
             await scrapePage(newPage, {
               pageType: PageType.LANDING,
               crawlId: crawlId,
@@ -157,13 +159,15 @@ export function clickAd(
         // Set up a listener to catch and block the initial navigation request
         popupCdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
           // TODO: save this URL somewhere
-          console.log('Intercepted and blocked ad (popup):', request.url);
+          console.log('Intercepted popup URL:', request.url);
 
           // Save the ad URL in the database.
           let db = DbClient.getInstance();
           await db.postgres.query('UPDATE ad SET url=$2 WHERE id=$1', [adId, request.url]);
 
           if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
+            clearTimeout(clickTimeout);
+            console.log('Aborting popup request...');
             // If we're blocking the popup, prevent navigation from running
             await popupCdp?.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' });
             // Close the tab (we don't have a puppeteer-land handle to the page)
@@ -172,6 +176,7 @@ export function clickAd(
             await cleanUp();
             resolve();
           } else {
+            console.log('Allowing popup requests to continue, letting page.on(popup) handle it...');
             // Otherwise, disable request interception and continue.
             await popupCdp?.send('Fetch.continueRequest', {requestId});
             await popupCdp?.send('Fetch.disable');
@@ -202,10 +207,11 @@ export function clickAd(
 
         // If the ad click opened a new tab/popup, start crawling in the new tab.
         ctPage = newPage;
-        log.info(`${newPage.url()}: opened in popup`);
+        log.info(`${newPage.url()}: scraping popup (page.on popup)`);
         injectDOMListener(newPage);
         newPage.on('load', async () => {
           try {
+            await sleep(5000);
             await scrapePage(newPage, {
               pageType: PageType.LANDING,
               crawlId: crawlId,

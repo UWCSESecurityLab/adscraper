@@ -8,7 +8,7 @@ import { findArticle, findPageWithAds } from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
 import DbClient from './util/db.js';
 import * as log from './util/log.js';
-import { createAsyncTimeout } from './util/timeout.js';
+import { createAsyncTimeout, sleep } from './util/timeout.js';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
 import path from 'path';
 
@@ -63,7 +63,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
   // How long the crawler can spend on each clickthrough page
   globalThis.CLICKTHROUGH_TIMEOUT = 30 * 1000;  // 30s
   // How long the crawler should wait for something to happen after clicking an ad
-  globalThis.AD_CLICK_TIMEOUT = 2 * 1000;  // 2s
+  globalThis.AD_CLICK_TIMEOUT = 5 * 1000;  // 5s
   // How long the crawler can spend waiting for the HTML of a page.
   globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;  // 1min
   // How long the crawler can spend waiting for the HTML and screenshot of an ad.
@@ -150,10 +150,17 @@ export async function crawl(flags: CrawlerFlags) {
     args: ['--disable-dev-shm-usage'],
     defaultViewport: VIEWPORT,
     headless: FLAGS.chromeOptions.headless,
+    handleSIGINT: false,
     userDataDir: FLAGS.chromeOptions.profileDir
   });
-  const version = await BROWSER.version();
 
+  process.on('SIGINT', async () => {
+    console.log('SIGINT received, closing browser...');
+    await BROWSER.close();
+    process.exit();
+  });
+
+  const version = await BROWSER.version();
   log.info('Running ' + version);
 
   try {
@@ -238,6 +245,8 @@ async function loadAndHandlePage(url: string, page: Page, pageType:
   }
   await page.goto(url, { timeout: 60000 });
 
+  await scrollDownPage(page);
+
   // Crawl the page
   let pageId: number;
   if (FLAGS.scrapeOptions.scrapeSite) {
@@ -270,6 +279,38 @@ async function loadAndHandlePage(url: string, page: Page, pageType:
     });
   }
   return pageId;
+}
+
+async function scrollDownPage(page: Page) {
+  let innerHeight = await page.evaluate(() => window.innerHeight);
+  let scrollTop = await page.evaluate(() => document.body.scrollTop);
+  let scrollHeight = await page.evaluate(() => document.body.scrollHeight);
+  let i = 0;
+  while (scrollTop + innerHeight < scrollHeight && i < 20) {
+    // Perform a random scroll on the Y axis, can
+    // be called at regular intervals to surface content on
+    // pages
+
+    // set a screen position to scroll from
+    let xloc = randrange(50, 100);
+    let yloc = randrange(50, 100);
+
+    // Scroll a random amount
+    let ydelta = randrange(200, 400);
+    // puppeteer provides current mouse position to wheel mouse event
+    await page.mouse.move(xloc, yloc);
+    await page.mouse.wheel({ deltaY: ydelta });
+    await sleep(1000);
+
+    innerHeight = await page.evaluate(() => window.innerHeight);
+    scrollTop = await page.evaluate(() => document.body.scrollTop);
+    scrollHeight = await page.evaluate(() => document.body.scrollHeight);
+    i += 1;
+  }
+}
+
+function randrange(low: number, high: number): number {
+  return Math.random() * (high - low) + low;
 }
 
 async function getPublicIp() {

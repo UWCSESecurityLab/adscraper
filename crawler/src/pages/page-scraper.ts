@@ -52,7 +52,6 @@ interface ScrapePageMetadata {
  */
 export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Promise<number> {
   log.info(`${page.url()}: Scraping page`);
-  await sleep(PAGE_SLEEP_TIME);
   let [timeout, timeoutId] = createAsyncTimeout<number>(
     `${page.url()}: Timed out crawling page`, PAGE_CRAWL_TIMEOUT);
 
@@ -62,11 +61,22 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
     try {
       let pageId = -1;
 
-      const pagesDir = path.join(
-        getCrawlOutputDirectory(metadata.crawlId),
-        'scraped_pages',
-        urlToPathSafeStr(page.url())
-      );
+      let pagesDir;
+      let filename = undefined;
+      if (metadata.pageType == PageType.LANDING) {
+        // Store landing pages with the associated ad
+        pagesDir = path.join(
+          getCrawlOutputDirectory(metadata.crawlId),
+          'scraped_ads/ad_' + metadata.referrerAd);
+        filename = `ad_${metadata.referrerAd}_landing_page`;
+      } else {
+        // Store other pages in their own directory
+        pagesDir = path.join(
+          getCrawlOutputDirectory(metadata.crawlId),
+          'scraped_pages',
+          urlToPathSafeStr(page.url())
+        );
+      }
       if (!fs.existsSync(pagesDir)) {
         fs.mkdirSync(pagesDir, { recursive: true });
       }
@@ -74,7 +84,8 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
       const scrapedPage = await scrapePageContent(
         page,
         pagesDir,
-        FLAGS.crawlerHostname);
+        FLAGS.crawlerHostname,
+        filename);
 
       pageId = await db.archivePage({
         job_id: FLAGS.jobId,
@@ -112,21 +123,22 @@ async function scrapePageContent(
   page: Page,
   outputDir: string,
   // externalScreenshotDir: string | undefined,
-  screenshotHost: string): Promise<ScrapedPage> {
+  screenshotHost: string,
+  outputFilename?: string): Promise<ScrapedPage> {
   try {
-    const pageUuid = uuidv4();
-    const outputFilePrefix = path.join(outputDir, pageUuid);
+    const filename = outputFilename ? outputFilename : uuidv4();
+    // const outputPathPrefix = path.join(outputDir, filename);
 
     // Save HTML content
     const html = await page.content();
-    const htmlFile = outputFilePrefix + '.html';
+    const htmlFile = path.join(outputDir, filename + '_document.html');
     fs.writeFileSync(htmlFile, html);
 
     // Save page snapshot
     const cdp = await page.target().createCDPSession();
     await cdp.send('Page.enable');
     const mhtml = (await cdp.send('Page.captureSnapshot', { format: 'mhtml' })).data;
-    const mhtmlFile = outputFilePrefix + '.mhtml';
+    const mhtmlFile = path.join(outputDir, filename + '_snapshot.mhtml');
     fs.writeFileSync(mhtmlFile, mhtml);
 
     // Save screenshot
@@ -135,10 +147,10 @@ async function scrapePageContent(
     const metadata = await img.metadata();
     let screenshotFile;
     if (metadata.height && metadata.height >= 16384) {
-      screenshotFile = outputFilePrefix + '.png';
-      await img.png().toFile(outputFilePrefix);
+      screenshotFile = path.join(outputDir, filename + '_screenshot.png');
+      await img.png().toFile(screenshotFile);
     } else {
-      screenshotFile = outputFilePrefix + '.webp'
+      screenshotFile = path.join(outputDir, filename + '_screenshot.webp');
       await img.webp({ lossless: true }).toFile(screenshotFile);
     }
 

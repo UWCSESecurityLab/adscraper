@@ -168,6 +168,13 @@ export async function scrapeAd(ad: ElementHandle,
 
   let [timeout, timeoutId] = createAsyncTimeout<number>(
     `${page.url()}: timed out while crawling ad`, AD_CRAWL_TIMEOUT);
+
+  // Declare adId here - we create an empty row in the database before
+  // the ad is scraped, so we can use the id for the directory name.
+  // If the process fails at an point, we have the adId in
+  // scope so we can delete it.
+  let adId: number | undefined;
+
   const _crawlAd = (async () => {
     try {
       // Scroll ad into view, and sleep to give it time to load.
@@ -176,11 +183,12 @@ export async function scrapeAd(ad: ElementHandle,
       }, ad);
       await sleep(AD_SLEEP_TIME);
 
+      adId = await db.createEmptyAd();
+
       const adsDir = path.join(
         getCrawlOutputDirectory(metadata.crawlId),
-        'scraped_ads',
-        urlToPathSafeStr(page.url())
-      );
+        'scraped_ads/ad_' + adId);
+
       if (!fs.existsSync(adsDir)) {
         fs.mkdirSync(adsDir, { recursive: true });
       }
@@ -189,9 +197,10 @@ export async function scrapeAd(ad: ElementHandle,
       const adContent = await scrapeAdContent(
         page, ad, adsDir,
         FLAGS.crawlerHostname,
-        FLAGS.scrapeOptions.screenshotAdsWithContext);
+        FLAGS.scrapeOptions.screenshotAdsWithContext,
+        adId);
 
-      const adId = await db.archiveAd({
+      await db.updateAd(adId, {
         job_id: FLAGS.jobId,
         parent_page: metadata.parentPageId,
         parent_page_url: page.url(),
@@ -214,10 +223,28 @@ export async function scrapeAd(ad: ElementHandle,
       return adId;
     } catch (e) {
       clearTimeout(timeoutId);
+      if (adId) {
+        db.postgres.query('DELETE FROM ad WHERE id=$1', [adId]);
+      }
       throw e;
     }
   })();
-  return Promise.race([timeout, _crawlAd])
+  try {
+    const res = await Promise.race([timeout, _crawlAd])
+    return res;
+  } catch (e) {
+    if (adId) {
+      db.postgres.query('DELETE FROM ad WHERE id=$1', [adId]);
+      const dir = path.join(
+        getCrawlOutputDirectory(metadata.crawlId),
+        'scraped_ads/ad_' + adId);
+      if (fs.readdirSync(dir).length == 0) {
+        fs.rmdirSync(dir);
+      }
+    }
+
+    throw e;
+  }
 }
 
 /**
@@ -230,6 +257,8 @@ export async function scrapeAd(ad: ElementHandle,
  * @param screenshotDir Where the screenshot should be saved
  * @param screenshotHost The hostname of the machine on which the screenshot
  * will be stored.
+ * @param adId The id that references this ad in the database. Optional,
+ * uses a UUID otherwise.
  * @returns A promise containing id of the stored ad in the database.
 */
 async function scrapeAdContent(
@@ -238,12 +267,13 @@ async function scrapeAdContent(
   screenshotDir: string,
   // externalScreenshotDir: string | undefined,
   screenshotHost: string,
-  withContext: boolean): Promise<ScrapedAd> {
+  withContext: boolean,
+  adId?: number): Promise<ScrapedAd> {
 
   // Collect the HTML content
   const html = await page.evaluate((e: Element) => e.outerHTML, ad);
 
-  const screenshotFile = uuidv4() + '.webp';
+  const screenshotFile = (adId ? 'ad_' + adId : uuidv4()) + '.webp';
   const savePath = path.join(screenshotDir, screenshotFile);
   // const realPath = externalScreenshotDir
   // ? path.join(externalScreenshotDir, screenshotFile)

@@ -76,7 +76,8 @@ interface ProfileCrawlList {
   // User provided name for the profile
   profileId: string;
   // Location of the Chrome user-data-dir to use for this crawl.
-  // If empty, creates one named (TODO) at (TODO)
+  // If the directory doesn't exist, creates a new one at this directory,
+  // called profile_<profileId>
   profileDir: string;
   // List of URLs to crawl in this profile.
   crawlListFile: string;
