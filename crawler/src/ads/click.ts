@@ -235,7 +235,11 @@ export function clickAd(
     // Finally click the ad
     log.info(`${page.url()}: Clicking on ad ${adId}`);
 
-    // Attempt to use the built-in puppeteer click.
-    await ad.click({ delay: 10 });
+    try {
+      // Attempt to use the built-in puppeteer click.
+      await ad.click({ delay: 10 });
+    } catch (e) {
+      reject(e);
+    }
   });
 }
