@@ -13,6 +13,7 @@ import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
 import path from 'path';
+import csvParser from 'csv-parser';
 
 sourceMapSupport.install();
 
@@ -24,7 +25,7 @@ export interface CrawlerFlags {
   pgConf: ClientConfig,
   crawlerHostname: string,
   crawlListFile: string,
-  // crawlPrevAdLandingPages?: number
+  crawlListHasReferrerAds: boolean,
 
   chromeOptions: {
     profileDir?: string,
@@ -56,6 +57,7 @@ declare global {
   var AD_SLEEP_TIME: number;
   var PAGE_SLEEP_TIME: number;
   var VIEWPORT: { width: number, height: number}
+  var CRAWL_ID: number;
 }
 
 function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
@@ -96,37 +98,47 @@ export async function crawl(flags: CrawlerFlags) {
   let crawlList: string[] = [];
   let crawlListAdIds: number[] = [];
 
-  // if (flags.crawlListFile) {
-    if (!fs.existsSync(flags.crawlListFile)) {
-      console.log(`${flags.crawlListFile} does not exist.`);
+  if (!fs.existsSync(flags.crawlListFile)) {
+    console.log(`${flags.crawlListFile} does not exist.`);
+    process.exit(1);
+  }
+
+  if (flags.crawlListHasReferrerAds) {
+    await (new Promise<void>((resolve, reject) => {
+      fs.createReadStream(flags.crawlListFile)
+        .pipe(csvParser())
+        .on('data', data => {
+          crawlList.push(data.url);
+          crawlListAdIds.push(data.ad_id);
+        }).on('end', () => {
+          resolve();
+        });
+    }));
+    console.log(crawlList);
+    console.log(crawlListAdIds);
+  } else {
+    crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
+  }
+
+  let i = 1;
+  for (let url of crawlList) {
+    try {
+      new URL(url);
+    } catch (e) {
+      log.strError(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
       process.exit(1);
     }
-
-    crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
-    let i = 1;
-    for (let url of crawlList) {
-      try {
-        new URL(url);
-      } catch (e) {
-        console.log(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
-        process.exit(1);
-      }
-    }
-  // } else if (flags.crawlPrevAdLandingPages) {
-  //   const landingPages = await db.postgres.query(`SELECT id, url FROM ad WHERE crawl_id=$1 AND url IS NOT NULL`, [flags.crawlPrevAdLandingPages])
-  //   crawlListAdIds = landingPages.rows.map(row => row.id);
-  //   crawlList = landingPages.rows.map(row => row.url);
-  // }
+  }
 
   // Initialize global variables and clients
   console.log(flags);
   setupGlobals(flags, crawlList);
 
   // Set up crawl entry, or resume from previous.
-  let crawlId: number;
+  // let crawlId: number;
   let crawlListStartingIndex = 0;
   if (!FLAGS.crawlId) {
-    crawlId = await db.insert({
+    globalThis.CRAWL_ID = await db.insert({
       table: 'crawl',
       returning: 'id',
       data: {
@@ -148,7 +160,7 @@ export async function crawl(flags: CrawlerFlags) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {// (FLAGS.crawlListFile ? path.basename(FLAGS.crawlListFile) : `Crawl ${FLAGS.crawlPrevAdLandingPages} landing pages`)) {
+    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {
       console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.crawlListFile}`);
       process.exit(1);
     }
@@ -156,7 +168,7 @@ export async function crawl(flags: CrawlerFlags) {
       console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
       process.exit(1);
     }
-    crawlId = FLAGS.crawlId;
+    globalThis.CRAWL_ID = FLAGS.crawlId;
     crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
   }
 
@@ -186,7 +198,7 @@ export async function crawl(flags: CrawlerFlags) {
     // Main loop through crawl list
     for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
       const url = crawlList[i];
-      // let prevAdId = FLAGS.crawlPrevAdLandingPages ? crawlListAdIds[i] : -1;
+      let prevAdId = FLAGS.crawlListHasReferrerAds ? crawlListAdIds[i] : -1;
 
       // Set overall timeout for this crawl list item
       let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
@@ -199,14 +211,23 @@ export async function crawl(flags: CrawlerFlags) {
           // Insert record for this crawl list item
           try {
             // Open the URL and scrape it (if specified)
-            const pageId = await loadAndHandlePage(url, seedPage, PageType.MAIN, crawlId) //, undefined, undefined, FLAGS.crawlPrevAdLandingPages ? prevAdId : undefined);
+            let pageId;
+            if (FLAGS.crawlListHasReferrerAds) {
+              pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.LANDING, referrerAd: prevAdId });
+            } else {
+              pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.MAIN });
+            }
 
             // Open additional pages (if specified) and scrape them (if specified)
             if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
               const articleUrl = await findArticle(seedPage);
               if (articleUrl) {
                 const articlePage = await BROWSER.newPage();
-                await loadAndHandlePage(articleUrl, articlePage, PageType.SUBPAGE, crawlId, pageId, seedPage.url());
+                await loadAndHandlePage(articleUrl, articlePage, {
+                  pageType: PageType.SUBPAGE,
+                  referrerPageId: pageId,
+                  referrerPageUrl: seedPage.url()
+                });
                 await articlePage.close();
               } else {
                 log.strError(`${url}: Couldn't find article`);
@@ -217,7 +238,11 @@ export async function crawl(flags: CrawlerFlags) {
               const urlWithAds = await findPageWithAds(seedPage);
               if (urlWithAds) {
                 const adsPage = await BROWSER.newPage();
-                await loadAndHandlePage(urlWithAds, adsPage, PageType.SUBPAGE, crawlId, pageId, seedPage.url());
+                await loadAndHandlePage(urlWithAds, adsPage, {
+                  pageType: PageType.SUBPAGE,
+                  referrerPageId: pageId,
+                  referrerPageUrl: seedPage.url()
+                });
                 await adsPage.close();
               } else {
                 log.strError(`${url}: Couldn't find article`);
@@ -235,11 +260,11 @@ export async function crawl(flags: CrawlerFlags) {
         log.error(e);
       } finally {
         await seedPage.close();
-        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i, crawlId])
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i, CRAWL_ID])
       }
     }
     await BROWSER.close();
-    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(),crawlId]);
+    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
   } catch (e) {
     await BROWSER.close();
     throw e;
@@ -247,19 +272,28 @@ export async function crawl(flags: CrawlerFlags) {
 }
 
 /**
- *
- * @param url URL to visit in the page
- * @param page Tab/Page that the URL should be visited in
  * @param pageType Whether the URL is the one in the crawl list, or an
  * additional URL that was found from a link on the initial page.
  * @param referrerPageId The page id of the page that this URL came from,
  * if this is a subpage of the crawl list page.
  * @param referrerPageUrl: The URL of the page that this URL came from.
  * if this is a subpage of the crawl list page.
- * @param crawlId ID of the crawl
  */
-async function loadAndHandlePage(url: string, page: Page, pageType:
-    PageType, crawlId: number, referrerPageId?: number, referrerPageUrl?: string, referrerAd?: number) {
+interface LoadPageMetadata {
+  pageType: PageType,
+  referrerPageId?: number,
+  referrerPageUrl?: string,
+  referrerAd?: number
+}
+
+/**
+ *
+ * @param url URL to visit in the page
+ * @param page Tab/Page that the URL should be visited in
+ * @param metadata Crawl metadata
+ * @returns The page ID of the crawled page in the database
+ */
+async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMetadata) {
   log.info(`${url}: loading page`);
   if (FLAGS.scrapeOptions.scrapeAds) {
     await domMonitor.injectDOMListener(page);
@@ -269,14 +303,12 @@ async function loadAndHandlePage(url: string, page: Page, pageType:
   await scrollDownPage(page);
 
   // Crawl the page
-  // TODO: if referrer ad is passed, call with landing page pagetype
   let pageId: number;
   if (FLAGS.scrapeOptions.scrapeSite) {
     pageId = await scrapePage(page, {
       crawlListUrl: url,
-      pageType: pageType,
-      crawlId: crawlId
-      // referrerAd: referrerAd,
+      pageType: metadata.pageType,
+      referrerAd: metadata.referrerAd
     });
   } else {
     // If we're not scraping page, still create a database entry (without)
@@ -284,20 +316,20 @@ async function loadAndHandlePage(url: string, page: Page, pageType:
     const db = DbClient.getInstance();
     pageId = await db.archivePage({
       job_id: FLAGS.jobId,
-      crawl_id: crawlId,
+      crawl_id: CRAWL_ID,
       timestamp: new Date(),
       url: page.url(),
       crawl_list_url: url,
-      page_type: pageType,
-      referrer_page: referrerPageId,
-      referrer_page_url: referrerPageUrl
+      page_type: metadata.pageType,
+      referrer_ad: metadata.referrerAd,
+      referrer_page: metadata.referrerPageId,
+      referrer_page_url: metadata.referrerPageUrl
     });
   }
   if (FLAGS.scrapeOptions.scrapeAds) {
     await scrapeAdsOnPage(page, {
-      crawlId: crawlId,
       crawlListUrl: url,
-      pageType: pageType,
+      pageType: metadata.pageType,
       parentPageId: pageId,
     });
   }

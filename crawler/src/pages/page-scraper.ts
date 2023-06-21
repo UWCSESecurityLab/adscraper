@@ -36,9 +36,9 @@ interface ScrapedPage {
  * that linked to this page.
  */
 interface ScrapePageMetadata {
-  pageType: PageType,
-  crawlId: number,
+  // crawlId: number,
   crawlListUrl: string,
+  pageType: PageType,
   referrerPage?: number,
   referrerPageUrl?: string,
   referrerAd?: number
@@ -66,13 +66,13 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
       if (metadata.pageType == PageType.LANDING) {
         // Store landing pages with the associated ad
         pagesDir = path.join(
-          getCrawlOutputDirectory(metadata.crawlId),
+          await getCrawlOutputDirectory(metadata.referrerAd),
           'scraped_ads/ad_' + metadata.referrerAd);
         filename = `ad_${metadata.referrerAd}_landing_page`;
       } else {
         // Store other pages in their own directory
         pagesDir = path.join(
-          getCrawlOutputDirectory(metadata.crawlId),
+          await getCrawlOutputDirectory(),
           'scraped_pages',
           urlToPathSafeStr(page.url())
         );
@@ -89,7 +89,7 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
 
       pageId = await db.archivePage({
         job_id: FLAGS.jobId,
-        crawl_id: metadata.crawlId,
+        crawl_id: CRAWL_ID,
         page_type: metadata.pageType,
         crawl_list_url: metadata.crawlListUrl,
         referrer_page: metadata.referrerPage,

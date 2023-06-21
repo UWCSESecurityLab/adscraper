@@ -48,7 +48,6 @@ interface ScrapedAd {
  * @property platform: The ad platform used by this ad, if identified
  */
 interface CrawlAdMetadata {
-  crawlId: number,
   pageType: PageType,
   parentPageId: number,
   crawlListUrl: string,
@@ -97,7 +96,6 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
           ? adHandle.screenshotTarget
           : adHandle.clickTarget;
         adId = await scrapeAd(scrapeTarget, page, {
-          crawlId: metadata.crawlId,
           pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
           crawlListUrl: metadata.crawlListUrl,
@@ -128,7 +126,6 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
           await clickAd(
             adHandle.clickTarget,
             page,
-            metadata.crawlId,
             adId,
             metadata.parentPageId,
             metadata.crawlListUrl
@@ -185,7 +182,7 @@ export async function scrapeAd(ad: ElementHandle,
       adId = await db.createEmptyAd();
 
       const adsDir = path.join(
-        getCrawlOutputDirectory(metadata.crawlId),
+        await getCrawlOutputDirectory(),
         'scraped_ads/ad_' + adId);
 
       if (!fs.existsSync(adsDir)) {
@@ -201,7 +198,7 @@ export async function scrapeAd(ad: ElementHandle,
 
       await db.updateAd(adId, {
         job_id: FLAGS.jobId,
-        crawl_id: metadata.crawlId,
+        crawl_id: CRAWL_ID,
         parent_page: metadata.parentPageId,
         parent_page_url: page.url(),
         parent_page_type: metadata.pageType,
@@ -236,7 +233,7 @@ export async function scrapeAd(ad: ElementHandle,
     if (adId) {
       db.postgres.query('DELETE FROM ad WHERE id=$1', [adId]);
       const dir = path.join(
-        getCrawlOutputDirectory(metadata.crawlId),
+        await getCrawlOutputDirectory(),
         'scraped_ads/ad_' + adId);
       if (fs.readdirSync(dir).length == 0) {
         fs.rmdirSync(dir);

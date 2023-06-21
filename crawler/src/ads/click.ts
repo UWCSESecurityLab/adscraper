@@ -19,7 +19,6 @@ import { sleep } from "../util/timeout.js";
 export function clickAd(
   ad: ElementHandle,
   page: Page,
-  crawlId: number,
   adId: number,
   pageId: number,
   crawlListUrl: string) {
@@ -103,7 +102,6 @@ export function clickAd(
               await sleep(5000);
               await scrapePage(newPage, {
                 pageType: PageType.LANDING,
-                crawlId: crawlId,
                 referrerPage: pageId,
                 referrerPageUrl: page.url(),
                 crawlListUrl: crawlListUrl,
@@ -223,7 +221,6 @@ export function clickAd(
               await sleep(5000);
               await scrapePage(newPage, {
                 pageType: PageType.LANDING,
-                crawlId: crawlId,
                 referrerPage: pageId,
                 referrerPageUrl: page.url(),
                 crawlListUrl: crawlListUrl,

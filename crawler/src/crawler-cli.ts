@@ -18,15 +18,15 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'crawl_list',
     type: String,
-    description: 'A file containing URLs to crawl, one URL per line',
+    description: 'A text file containing URLs to crawl, one URL per line',
     group: 'main'
   },
-  // {
-  //   name: 'crawl_prev_ad_landing_pages',
-  //   type: Number,
-  //   description: 'Instead of crawling from a crawl list, crawls the captured ad URLs from the provided crawl id.',
-  //   group: 'main'
-  // },
+  {
+    name: 'crawl_list_with_referrer_ads',
+    type: String,
+    description: 'A CSV with the columns (url, ad_id) containing URLs to crawl, and the ad_id of the referrer ad. Use this option instead of --crawl_list if scraping ad landing pages separately from ads, to avoid profile pollution.',
+    group: 'main'
+  },
   {
     name: 'output_dir',
     type: String,
@@ -193,21 +193,21 @@ if (options.help) {
   console.log(commandLineUsage(usage));
   process.exit(0);
 }
-if (!options.crawl_list) {
-  console.log('Missing required parameter: --crawl_list');
+// if (!options.crawl_list) {
+//   console.log('Missing required parameter: --crawl_list');
+//   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
+//   process.exit(1);
+// }
+if (!options.crawl_list && !options.crawl_list_with_referrer_ads) {
+  console.log('Missing required parameter: --crawl_list OR --crawl_list_with_referrer_ads');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
-// if (!options.crawl_list && !options.crawl_prev_ad_landing_pages) {
-//   console.log('Missing required parameter: --crawl_list OR --crawl_prev_ad_landing_pages');
-//   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-//   process.exit(1);
-// }
-// if (options.crawl_list && options.crawl_prev_ad_landing_pages) {
-//   console.log('Cannot provide both --crawl_list and --crawl_prev_ad_landing_pages flags');
-//   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-//   process.exit(1);
-// }
+if (options.crawl_list && options.crawl_list_with_referrer_ads) {
+  console.log('Cannot provide both --crawl_list and --crawl_list_with_referrer_ads flags');
+  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
+  process.exit(1);
+}
 if (!options.output_dir) {
   console.log('Missing required parameter: --output_dir');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
@@ -260,8 +260,8 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       outputDir: options.output_dir,
       pgConf: pgConf,
       crawlerHostname: options.crawler_hostname,
-      crawlListFile: options.crawl_list,
-      // crawlPrevAdLandingPages: options.crawl_prev_ad_landing_pages,
+      crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
+      crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
       crawlId: options.crawl_id,
 
       chromeOptions: {
