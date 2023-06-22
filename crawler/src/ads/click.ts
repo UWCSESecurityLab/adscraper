@@ -94,11 +94,11 @@ export function clickAd(
           } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
             // Open the blocked URL in a new tab, so that we can keep the previous
             // one open.
-            log.verbose(`${page.url} Blocked attempted navigation to ${req.url}`);
+            log.verbose(`${page.url()} Blocked attempted navigation to ${req.url}`);
             let newPage = await BROWSER.newPage();
             try {
               ctPage = newPage;
-              log.debug(`${newPage.url}: Loading and scraping popup page`);
+              log.debug(`${newPage.url()}: Loading and scraping popup page`);
               await newPage.goto(req.url(), { referer: req.headers().referer });
               await sleep(5000);
               await scrapePage(newPage, {
@@ -184,7 +184,7 @@ export function clickAd(
               await cleanUp();
               resolve();
             } else {
-              log.verbose(`${page.url} Allowing popup requests to continue, letting page.on(popup) handle it...`);
+              log.verbose(`${page.url()} Allowing popup requests to continue, letting page.on(popup) handle it...`);
               // Otherwise, disable request interception and continue.
               await popupCdp?.send('Fetch.continueRequest', {requestId});
               await popupCdp?.send('Fetch.disable');
@@ -199,7 +199,7 @@ export function clickAd(
             // this request is sent, and the target is already closed. However,
             // in that case we successfully got the data (somehow) so we can
             // safely do nothing here.
-            log.verbose(`${page.url}: Popup navigation request caught in CDP before resuming tab. Continuing...`);
+            log.verbose(`${page.url()}: Popup navigation request caught in CDP before resuming tab. Continuing...`);
           }
         } catch (e: any) {
           log.error(e);
@@ -215,7 +215,7 @@ export function clickAd(
 
           // If the ad click opened a new tab/popup, start crawling in the new tab.
           ctPage = newPage;
-          log.debug(`${newPage.url}: Loading and scraping popup page`);
+          log.debug(`${newPage.url()}: Loading and scraping popup page`);
           injectDOMListener(newPage);
           newPage.on('load', async () => {
             try {
