@@ -4,6 +4,24 @@
 websites), it opens the website in a Chromium browser, and takes a screenshot
 and saves the HTML content of each ad on the page.
 
+- [adscraper: A Web Crawler for Measuring Online Ad Content](#adscraper-a-web-crawler-for-measuring-online-ad-content)
+  - [Introduction](#introduction)
+    - [Components](#components)
+    - [Research using adscraper](#research-using-adscraper)
+    - [Warning: Research Code!](#warning-research-code)
+  - [Setup](#setup)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+  - [Crawler Usage](#crawler-usage)
+    - [Create input file(s) and output directories](#create-input-files-and-output-directories)
+    - [Running a basic crawl to scrape ads](#running-a-basic-crawl-to-scrape-ads)
+    - [Collecting ad URLs and landing pages](#collecting-ad-urls-and-landing-pages)
+    - [Using profiles](#using-profiles)
+    - [Advanced example: collecting ads and landing pages in separate profiles](#advanced-example-collecting-ads-and-landing-pages-in-separate-profiles)
+    - [Resuming a failed crawl](#resuming-a-failed-crawl)
+    - [Other command line options](#other-command-line-options)
+  - [Parallel crawls with `crawl-coordinator`](#parallel-crawls-with-crawl-coordinator)
+
 ## Introduction
 
 ### Components
