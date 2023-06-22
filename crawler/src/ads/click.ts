@@ -216,7 +216,7 @@ export function clickAd(
           // If the ad click opened a new tab/popup, start crawling in the new tab.
           ctPage = newPage;
           log.debug(`${newPage.url()}: Loading and scraping popup page`);
-          injectDOMListener(newPage);
+          // injectDOMListener(newPage);
           newPage.on('load', async () => {
             try {
               await sleep(5000);

@@ -291,9 +291,9 @@ interface LoadPageMetadata {
  */
 async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMetadata) {
   log.info(`${url}: Loading page`);
-  if (FLAGS.scrapeOptions.scrapeAds) {
-    await domMonitor.injectDOMListener(page);
-  }
+  // if (FLAGS.scrapeOptions.scrapeAds) {
+  //   await domMonitor.injectDOMListener(page);
+  // }
   await page.goto(url, { timeout: 120000 });
   log.info(`${url}: Page finished loading`)
   await scrollDownPage(page);

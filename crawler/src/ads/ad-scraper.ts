@@ -140,15 +140,15 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
       i += 1;
     }
   }
-  const mutations = await matchDOMUpdateToAd(page, adHandleToAdId);
-  if (mutations.length > 0) {
-    for (let mutation of mutations) {
-      await db.insert({
-        table: 'ad_domain',
-        data: mutation
-      });
-    }
-  }
+  // const mutations = await matchDOMUpdateToAd(page, adHandleToAdId);
+  // if (mutations.length > 0) {
+  //   for (let mutation of mutations) {
+  //     await db.insert({
+  //       table: 'ad_domain',
+  //       data: mutation
+  //     });
+  //   }
+  // }
 }
 
 /**
@@ -215,8 +215,8 @@ export async function scrapeAd(ad: ElementHandle,
       log.debug(`${page.url()}: Archived ad content with id ${adId}`);
 
       // Extract 3rd party domains from ad
-      const adExternals = await extractExternalUrls(ad);
-      await db.archiveExternalUrls(adExternals, adId);
+      // const adExternals = await extractExternalUrls(ad);
+      // await db.archiveExternalUrls(adExternals, adId);
 
       // Scrape iframe content in ad
       const scrapedIFrames = await scrapeIFramesInElement(ad);
