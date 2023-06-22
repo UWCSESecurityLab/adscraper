@@ -53,10 +53,10 @@ export async function scrapeIframe(iframe: Frame): Promise<ScrapedIFrame> {
     });
 
     const root = await iframe.$('html');
-    let externals;
-    if (root) {
-      externals = await extractExternalUrls(root);
-    }
+    // let externals;
+    // if (root) {
+    //   externals = await extractExternalUrls(root);
+    // }
 
     let children: Array<ScrapedIFrame>;
     if (iframe.childFrames().length > 0) {
@@ -70,7 +70,7 @@ export async function scrapeIframe(iframe: Frame): Promise<ScrapedIFrame> {
       url: iframe.url(),
       html: thisContent,
       children: children,
-      externals: externals
+      // externals: externals
     };
   } catch (e) {
     throw e;
