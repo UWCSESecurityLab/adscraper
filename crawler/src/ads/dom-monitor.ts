@@ -18,7 +18,7 @@ const pageToHandleToDOMMutatorUrls = new Map<Page, Map<ElementHandle, Set<string
 * @param page Page to listen for DOM changes in.
 */
 export async function injectDOMListener(page: Page) {
-  log.info(`${page.url()}: Injecting DOM listeners`);
+  log.debug(`${page.url()}: Injecting DOM listeners`);
   await page.exposeFunction('sendToPuppeteer', (data: any) => {
     trackDOMUpdate(page, data);
   });
@@ -190,7 +190,7 @@ export async function matchDOMUpdateToAd(
       continue;
     }
     for (let url of mutatorUrls) {
-      log.info(`Ad ${adId} was mutated by ${url}`);
+      log.debug(`Ad ${adId} was mutated by ${url}`);
       mutations.push({
         ad_id: adId,
         url: url,

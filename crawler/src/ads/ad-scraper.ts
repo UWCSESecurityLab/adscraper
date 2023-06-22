@@ -63,8 +63,11 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
   const adHandleToAdId = new Map<ElementHandle, number>();
   log.info(`${page.url()}: ${ads.size} ads identified`);
 
+  let i = 1;
   // Main loop through all ads on page
   for (let ad of ads) {
+    log.info(`${page.url()}: Scraping ad ${i} of ${ads.size}`)
+
     // An ad can contain multiple sub-ads (a "chumbox"). We store the handles
     // in case this happens.
     let adHandles: AdHandles[];
@@ -102,10 +105,10 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
           chumboxId: chumboxId,
           platform: platform
         });
-        log.info(`${page.url()}: Ad archived, saved under id=${adId}`);
         adHandleToAdId.set(ad, adId);
       } catch (e) {
         log.warning('Couldn\'t scrape ad: ' + e);
+        i += 1;
         continue;
       }
 
@@ -134,6 +137,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
       } catch (e) {
         log.warning('Couldn\'t click ad: ' + e);
       }
+      i += 1;
     }
   }
   const mutations = await matchDOMUpdateToAd(page, adHandleToAdId);
@@ -173,13 +177,14 @@ export async function scrapeAd(ad: ElementHandle,
 
   const _crawlAd = (async () => {
     try {
+      // Create an ad id for the directory
+      adId = await db.createEmptyAd();
+
       // Scroll ad into view, and sleep to give it time to load.
       await page.evaluate((e: Element) => {
         e.scrollIntoView({ block: 'center' });
       }, ad);
       await sleep(AD_SLEEP_TIME);
-
-      adId = await db.createEmptyAd();
 
       const adsDir = path.join(
         await getCrawlOutputDirectory(),
@@ -206,6 +211,8 @@ export async function scrapeAd(ad: ElementHandle,
         platform: metadata.platform,
         ...adContent
       });
+
+      log.debug(`${page.url()}: Archived ad content with id ${adId}`);
 
       // Extract 3rd party domains from ad
       const adExternals = await extractExternalUrls(ad);

@@ -87,17 +87,18 @@ export function clickAd(
 
           if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
             // If blocking ads from loading, clean up the tab and continue.
-            console.log('Intercepted and blocked ad (navigation):', req.url());
+            log.verbose(`${page.url()} Intercepted and blocked ad (navigation): ${req.url()}`);
             await cleanUp();
             resolve();
             return;
           } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
             // Open the blocked URL in a new tab, so that we can keep the previous
             // one open.
-            log.info(`Blocked attempted navigation to ${req.url()}, opening in a new tab`);
+            log.verbose(`${page.url} Blocked attempted navigation to ${req.url}`);
             let newPage = await BROWSER.newPage();
             try {
               ctPage = newPage;
+              log.debug(`${newPage.url}: Loading and scraping popup page`);
               await newPage.goto(req.url(), { referer: req.headers().referer });
               await sleep(5000);
               await scrapePage(newPage, {
@@ -121,7 +122,7 @@ export function clickAd(
             // Allow other unrelated requests through
             await req.continue();
           } catch (e: any) {
-            log.warning(e);
+            log.error(e);
           }
         }
       });
@@ -166,15 +167,15 @@ export function clickAd(
           // Set up a listener to catch and block the initial navigation request
           popupCdp.on('Fetch.requestPaused', async ({ requestId, request }) => {
             // TODO: save this URL somewhere
-            console.log('Intercepted popup URL:', request.url);
+            log.verbose(`${page.url()}: Intercepted popup URL: ${request.url}`);
 
             // Save the ad URL in the database.
             let db = DbClient.getInstance();
             await db.postgres.query('UPDATE ad SET url=$2 WHERE id=$1', [adId, request.url]);
-
+            log.debug(`${page.url()}: Saved ad URL for ad ${adId}`);
             if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
               clearTimeout(clickTimeout);
-              console.log('Aborting popup request...');
+              log.verbose(`${page.url()}: Aborting popup request...`);
               // If we're blocking the popup, prevent navigation from running
               await popupCdp?.send('Fetch.failRequest', { requestId, errorReason: 'Aborted' });
               // Close the tab (we don't have a puppeteer-land handle to the page)
@@ -183,7 +184,7 @@ export function clickAd(
               await cleanUp();
               resolve();
             } else {
-              console.log('Allowing popup requests to continue, letting page.on(popup) handle it...');
+              log.verbose(`${page.url} Allowing popup requests to continue, letting page.on(popup) handle it...`);
               // Otherwise, disable request interception and continue.
               await popupCdp?.send('Fetch.continueRequest', {requestId});
               await popupCdp?.send('Fetch.disable');
@@ -198,7 +199,7 @@ export function clickAd(
             // this request is sent, and the target is already closed. However,
             // in that case we successfully got the data (somehow) so we can
             // safely do nothing here.
-            log.info('Popup navigation request caught in CDP before resuming tab. Continuing...');
+            log.verbose(`${page.url}: Popup navigation request caught in CDP before resuming tab. Continuing...`);
           }
         } catch (e: any) {
           log.error(e);
@@ -214,7 +215,7 @@ export function clickAd(
 
           // If the ad click opened a new tab/popup, start crawling in the new tab.
           ctPage = newPage;
-          log.info(`${newPage.url()}: scraping popup (page.on popup)`);
+          log.debug(`${newPage.url}: Loading and scraping popup page`);
           injectDOMListener(newPage);
           newPage.on('load', async () => {
             try {
@@ -243,10 +244,10 @@ export function clickAd(
       // Finally click the ad
       log.info(`${page.url()}: Clicking on ad ${adId}`);
 
-
       // Attempt to use the built-in puppeteer click.
       await ad.click({ delay: 10 });
-    } catch (e) {
+    } catch (e: any) {
+      log.error(e);
       reject(e);
       page.removeAllListeners();
       await page.setRequestInterception(false);

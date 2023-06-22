@@ -97,7 +97,7 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
         referrer_ad: metadata.referrerAd,
         ...scrapedPage
       });
-      log.info(`${page.url()}: Archived page content`);
+      log.debug(`${page.url()}: Archived page content`);
       clearTimeout(timeoutId);
       return pageId;
 

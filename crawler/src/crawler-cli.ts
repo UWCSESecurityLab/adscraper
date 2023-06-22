@@ -4,7 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import sourceMapSupport from 'source-map-support';
 import * as crawler from './crawler.js';
-import * as log from './util/log.js';
+import { LogLevel } from './util/log.js';
 sourceMapSupport.install();
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
@@ -57,6 +57,13 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     type: String,
     description: 'The hostname of this crawler (Optional). Defaults to "os.hostname()", but if this crawler is being run in a Docker container, you must manually supply the hostname of the Docker host to correctly tag screenshots.',
     defaultValue: os.hostname(),
+    group: 'main'
+  },
+  {
+    name: 'log_level',
+    type: String,
+    description: 'Sets the level of logging verbosity. Choose one of the following: error > warning > info > debug > verbose. Defaults to "info"',
+    defaultValue: 'info',
     group: 'main'
   },
   {
@@ -232,6 +239,29 @@ if (options.headless == 'true') {
   process.exit(1);
 }
 
+let logLevel: LogLevel;
+switch (options.log_level) {
+  case 'error':
+    logLevel = LogLevel.ERROR
+    break;
+  case 'warning':
+    logLevel = LogLevel.WARNING
+    break;
+  case 'info':
+    logLevel = LogLevel.INFO
+    break;
+  case 'debug':
+    logLevel = LogLevel.DEBUG
+    break;
+  case 'verbose':
+    logLevel = LogLevel.VERBOSE
+    break;
+  default:
+    console.log(`Invalid log level: ${options.log_level}`)
+    console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
+    process.exit(1)
+}
+
 let pgConf: {
   host: string,
   port: number,
@@ -263,6 +293,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
       crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
       crawlId: options.crawl_id,
+      logLevel: logLevel,
 
       chromeOptions: {
         headless: headless,
@@ -282,11 +313,11 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
       },
     });
-    log.info('Crawl succeeded');
+    console.log('Crawl succeeded');
     process.exit(0);
   } catch (e: any) {
-    log.error(e);
-    log.warning('Crawl failed');
+    console.log(e);
+    console.log('Crawl failed');
     process.exit(1);
   }
 })();

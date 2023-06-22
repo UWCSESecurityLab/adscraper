@@ -26,6 +26,7 @@ export interface CrawlerFlags {
   crawlerHostname: string,
   crawlListFile: string,
   crawlListHasReferrerAds: boolean,
+  logLevel: log.LogLevel,
 
   chromeOptions: {
     profileDir?: string,
@@ -49,7 +50,6 @@ export interface CrawlerFlags {
 declare global {
   var BROWSER: Browser;
   var FLAGS: CrawlerFlags;
-  var OVERALL_TIMEOUT: number;
   var PAGE_CRAWL_TIMEOUT: number;
   var AD_CRAWL_TIMEOUT: number;
   var CLICKTHROUGH_TIMEOUT: number;
@@ -60,11 +60,8 @@ declare global {
   var CRAWL_ID: number;
 }
 
-function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
+function setupGlobals(crawlerFlags: CrawlerFlags) {
   globalThis.FLAGS = crawlerFlags;
-  // How long the crawler should spend on the whole crawl (all pages/ads/CTs)
-  // 15 min per item in the crawl list
-  globalThis.OVERALL_TIMEOUT = crawlList.length * 15 * 60 * 1000;
   // How long the crawler can spend on each clickthrough page
   globalThis.CLICKTHROUGH_TIMEOUT = 30 * 1000;  // 30s
   // How long the crawler should wait for something to happen after clicking an ad
@@ -83,9 +80,9 @@ function setupGlobals(crawlerFlags: CrawlerFlags, crawlList: string[]) {
 }
 
 export async function crawl(flags: CrawlerFlags) {
-  // if (!flags.crawlListFile && !flags.crawlPrevAdLandingPages) {
-  //   console.log('Must specific either --crawl_list or --crawl_prev_ad_landing_pages')
-  // }
+  // Initialize global variables and clients
+  // console.log(flags);
+  setupGlobals(flags);
 
   // Validate arguments
   if (!fs.existsSync(flags.outputDir)) {
@@ -130,9 +127,8 @@ export async function crawl(flags: CrawlerFlags) {
     }
   }
 
-  // Initialize global variables and clients
-  console.log(flags);
-  setupGlobals(flags, crawlList);
+  // Now that the length of the crawl list is known, set the global timeout
+  const OVERALL_TIMEOUT = crawlList.length * 15 * 60 * 1000;
 
   // Set up crawl entry, or resume from previous.
   // let crawlId: number;
@@ -294,12 +290,12 @@ interface LoadPageMetadata {
  * @returns The page ID of the crawled page in the database
  */
 async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMetadata) {
-  log.info(`${url}: loading page`);
+  log.info(`${url}: Loading page`);
   if (FLAGS.scrapeOptions.scrapeAds) {
     await domMonitor.injectDOMListener(page);
   }
   await page.goto(url, { timeout: 120000 });
-
+  log.info(`${url}: Page finished loading`)
   await scrollDownPage(page);
 
   // Crawl the page
@@ -337,6 +333,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
 }
 
 async function scrollDownPage(page: Page) {
+  log.info(`${page.url()}: Scrolling page from top to bottom`);
   let innerHeight = await page.evaluate(() => window.innerHeight);
   let scrollY = await page.evaluate(() => window.scrollY);
   let scrollHeight = await page.evaluate(() => document.body.scrollHeight);
