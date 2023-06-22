@@ -16,9 +16,9 @@ CREATE TABLE crawl (
   id SERIAL PRIMARY KEY,
   job_id INTEGER REFERENCES job(id),
   name TEXT,
-  start_time TIMESTAMPTZ
+  start_time TIMESTAMPTZ,
   completed BOOLEAN,
-  completed_time TIMESTAMPTZ
+  completed_time TIMESTAMPTZ,
   crawl_list TEXT,
   crawl_list_current_index INTEGER,
   crawl_list_length INTEGER,
@@ -35,7 +35,7 @@ CREATE TABLE page (
   job_id INTEGER REFERENCES job(id),
   crawl_id INTEGER REFERENCES crawl(id),
   -- When the page was scraped
-  timestamp TIMESTAMPTZ
+  timestamp TIMESTAMPTZ,
   -- URL of the scraped page
   url TEXT,
   -- Domain name of url (for convenience)
@@ -89,7 +89,7 @@ CREATE TABLE ad (
   job_id INTEGER REFERENCES job(id),
   crawl_id INTEGER REFERENCES crawl(id),
   -- When the ad was scraped
-  timestamp TIMESTAMPTZ
+  timestamp TIMESTAMPTZ,
   -- The initial URL that the ad links to. The actual landing page URL may differ;
   -- because of redirect chains.
   url TEXT,
@@ -145,7 +145,7 @@ CREATE INDEX referrer_ad_index ON page(referrer_ad);
 -- Stores the content of iframes inside scraped ads.
 CREATE TABLE iframe (
   id SERIAL PRIMARY KEY,
-  timestamp TIMESTAMPTZ
+  timestamp TIMESTAMPTZ,
   url TEXT,
   parent_ad INTEGER REFERENCES ad(id),
   parent_iframe INTEGER REFERENCES iframe(id),
