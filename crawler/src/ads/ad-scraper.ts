@@ -5,6 +5,7 @@ import sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
 import { PageType } from '../pages/page-scraper.js';
 import DbClient from '../util/db.js';
+import getCrawlOutputDirectory from '../util/getCrawlOutputDirectory.js';
 import * as log from '../util/log.js';
 import { createAsyncTimeout, sleep } from '../util/timeout.js';
 import { identifyAdsInDOM } from './ad-detection.js';
@@ -13,7 +14,6 @@ import { splitChumbox } from './chumbox-handler.js';
 import { clickAd } from './click.js';
 import { matchDOMUpdateToAd } from './dom-monitor.js';
 import { scrapeIFramesInElement } from './iframe-scraper.js';
-import getCrawlOutputDirectory from '../util/getCrawlOutputDirectory.js';
 
 // Handle to an ad. We store two handles: the screenshot target, which
 // is the entire area of the ad, and the click target, which is the region

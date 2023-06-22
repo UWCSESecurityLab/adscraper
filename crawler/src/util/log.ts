@@ -99,7 +99,7 @@ function writeLog(l: { ts: string, level: string, message: string, stack?: strin
   }
 
   const log = formatLog(l);
-  fs.writeFile(logPath, log, { flag: 'a' }, (err) => {
+  fs.writeFile(logPath, log + '\n', { flag: 'a' }, (err) => {
     if (err) {
       console.log(err);
     }
