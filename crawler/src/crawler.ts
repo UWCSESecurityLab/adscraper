@@ -156,8 +156,8 @@ export async function crawl(flags: CrawlerFlags) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (prevCrawl.rows[0].crawl_list !== path.basename(FLAGS.crawlListFile)) {
-      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.crawlListFile}`);
+    if (path.basename(prevCrawl.rows[0].crawl_list) !== path.basename(FLAGS.crawlListFile)) {
+      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(FLAGS.crawlListFile)}`);
       process.exit(1);
     }
     if (prevCrawl.rows[0].crawl_list_length !== crawlList.length) {
