@@ -4,7 +4,10 @@
 websites), it opens the website in a Chromium browser, and takes a screenshot
 and saves the HTML content of each ad on the page.
 
-## Components
+## Introduction
+
+### Components
+
 - The adscraper **crawler** is a Node.js script that uses the
 [puppeteer](https://github.com/puppeteer/puppeteer) library to automatically
 browse and collect ad data. You can use the crawler via the command line to
@@ -18,15 +21,19 @@ application storage, or history. You can also connect crawl-coordinator to
 a Wireguard-based VPN, to tunnel crawls through a different IP address in a
 different location.
 
-## Research using adscraper
+### Research using adscraper
+
 adscraper has been used to conduct research measuring and auditing the online
 ads ecosystem. You can read about some of the projects that used adscraper below:
+
 - [(Project website) Bad Ads: Problematic Content in Online Advertising](https://badads.cs.washington.edu)
+- [(Paper) Polls, Clickbait, and Commemorative $2 Bills: Problematic Political Advertising on News and Media Websites Around the 2020 U.S. Elections](https://badads.cs.washington.edu/political.html)
 - [(Paper) What Makes a "Bad" Ad? User Perceptions of Problematic Online Advertising](https://badads.cs.washington.edu/files/Zeng-CHI2021-BadAds.pdf)
 - [(Paper) Bad News: Clickbait and Deceptive Ads on News and Misinformation Websites](https://badads.cs.washington.edu/files/Zeng-ConPro2020-BadNews.pdf)
 
-# Warning: Research Code!
-adscraper is not yet production quality code - most of this was written for our
+### Warning: Research Code!
+
+`adscraper` is not  production quality code - most of this was written for our
 specific research projects, and may not work for your specific use case, and
 may contain various bugs and defects.
 
@@ -35,125 +42,287 @@ know by filing an issue or asking a question in the discussions. I will also
 accept pull requests for fixing bugs, doc bugs, or making the project more
 generally usable and configurable.
 
+## Setup
 
-# Prerequisites
+### Prerequisites
+
 To run adscraper, you must have the following software installed:
+
 - Node.js
 - TypeScript
 - PostgreSQL
 - Docker (for isolated/parallel crawls via [crawl-coordinator](crawl-coordinator))
 
+### Installation
 
-# Installation
 This section will help you install and configure adscraper. For our initial
 release, adscraper will be a Node.js script that you run directly out of the
 repository, but in the future, we may refactor it into a library that you
 can use in your own project.
 
+**Get the source code**.
 First, clone this repository.
-```
-git clone <url>
-```
 
-Second, install Typescript globally via npm. This is not strictly necessary but
-can be helpful for development/writing your own scripts based on adscraper.
-```
-npm install -g typescript
+```sh
+git clone https://github.com/UWCSESecurityLab/adscraper.git
 ```
 
-Further setup and installation instructions for the basic `crawler` script
-and the parallelized `crawl-coordinator` script are described in the next
-section.
+**Set up the database.**
+Next, create a Postgres database, using the schema specified in
+[db/adscraper.sql](db/adscraper.sql). Metadata from crawls will be stored
+in here. You can either copy the code into the `psql` command line, or run
+the following command:
 
-# Usage
-
-## Running Basic Crawls
-This is a guide for running basic crawls using `crawler`. The crawler script
-scrapes ads from a single website, without the Docker-based profile isolation.
-
-### Setup 
-First, you must have a PostgreSQL database that has the schema defined in
-`db/adscraper.sql`. You can set this up yourself, or follow the instructions
-in [db/README.md](db/README.md).
-
-Then, install dependencies and compile the code in the `crawler` directory.
-```
-cd crawler
-npm install
-npm run build
+```sh
+psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
+This creates a database named `adscraper` and populates it with the tables
+and indices provided.
 
-### Commands
+Then, create a JSON file containing the authentication
+credentials for your Postgres server. The format of the JSON file is the
+[config file used by node-postgres](https://node-postgres.com/apis/client#new-client). For example:
 
-The main script for the basic, CLI-based crawler is the Typescript
-file `src/crawler-cli.ts`.
-To compile the script run the following command:
-```
-npm run build  # or npx tsc, or tsc if you have Typescript installed globally
-```
-
-The compiled script is now at `src/crawler-cli.js`. To run the script, run:
-```
-node gen/crawler-cli.js
-```
-The `--help` flag will show the command line options.
-
-### Example
-In this example, we create a JSON configuration file for the Postgres database, in the
-`crawler/` directory. The file is named `pg_conf.json`:
 ```json
 {
   "host": "localhost",
   "port": 5432,
   "database": "adscraper",
-  "user": "adscraper",
-  "password": "example_password_12345"
+  "user": "<your postgres username>",
+  "password": "<your postgres password>"
 }
 ```
 
-Create a directory for storing screenshots:
-```
-mkdir ~/adscraper_screenshots
-```
+**Build the project.**
+Lastly, install the Node dependencies and compile the code in the `crawler` directory.
 
-Currently, crawls must be associated with a _job_. We need to manually create
-a job in the postgres database. We'll do this using the psql command line interface.
 ```sh
-psql -h localhost -U adscraper
+cd crawler
+npm install
+npm run build
 ```
-```sql
-adscraper=# INSERT INTO job (name, timestamp) VALUES ('test crawl', NOW());
+
+## Crawler Usage
+
+This is a guide for running individual crawler instances using `crawler`.
+
+### Create input file(s) and output directories
+
+First, you need to create a **crawl list** - the URLs that the crawler will visit.
+The format is a text file containing one URL per line. For example:
+
+```txt
+https://www.nytimes.com/
+https://www.cnn.com/
 ```
-(Use CTRL+d to exit.)
 
+Next, create an **output directory**, where the crawler will save screenshots,
+HTML files, and MHTML snapshots. Other metadata will be stored in the
+Postgres database. The structure of the directory, when populated,
+will look like this:
 
-This command runs a crawl on the homepage and an article on _nytimes.com_.
+```txt
+output_dir/
+├─ <crawl name>/
+│  ├─ scraped_ads/
+│  │  ├─ ad_<id>/
+│  │  │  ├─ ad_<id>.webp
+│  │  │  ├─ ad_<id>_landing_page_screenshot.webp
+│  │  │  ├─ ad_<id>_landing_page_content.html
+│  │  │  ├─ ad_<id>_landing_page_snapshot.mhtml
+│  ├─ scraped_pages/
+│  │  ├─ <url>/
+│  │  │  ├─ <url>_screenshot.webp
+│  │  │  ├─ <url>_content.html
+│  │  │  ├─ <url>_snapshot.mhtml
+```
+
+### Running a basic crawl to scrape ads
+
+Now that the inputs, outputs, and database are set up, we can run some
+crawls. The simplest crawl configuration is to scrape screenshots of ads from
+a list of URLs, using the `--scrape_ads` options.
+
 ```sh
 node gen/crawler-cli.js \
-  --job_id 1 \
-  --max_page_crawl_depth 2 \
-  --url https://nytimes.com \
-  --screenshot_dir ~/adscraper_screenshots/ \
-  --label news \
-  --pg_conf_file pg_conf.json \
-  --crawl_article
+    --name example_crawl_name \
+    --output_dir /path/to/your/output/dir \
+    --crawl_list /path/to/your/crawl/list \
+    --pg_conf_file /path/to/your/postgres/config \
+    --scrape_ads \
+    --click_ads=noClick
 ```
 
-## Crawling lists of sites in parallel and in isolation
-Using `crawl-coordinator`, you can crawl a large list of sites with a single
-command, using parallel crawler instances. `crawl-coordinator` also ensures
-that each crawl has a fresh profile, by using a separate Docker container
-for each site in the list.
+The ads will be stored in the `ad` table in the database. Additionally,
+screenshots of the ads will be stored in
+`<output_dir>/<crawl_name>/scraped_ads/ad_<id>`, using the same id as in Postgres.
+The `ad` table also contains the path to the screenshot under the `screenshot`
+column.
 
+Additionally, if we want screenshots/snapshots of the pages the ads appeared on,
+we can add the `--scrape_site` option.
+
+```sh
+node gen/crawler-cli.js \
+    --name example_crawl_name \
+    --output_dir /path/to/your/output/dir \
+    --crawl_list /path/to/your/crawl/list \
+    --pg_conf_file /path/to/your/postgres/config \
+    --scrape_ads \
+    --scrape_site \
+    --click_ads=noClick
+```
+
+Pages will be stored in the `page` table in the database, and the
+`scraped_pages` directory in the output directory. The crawler saves the
+main HTML document, a full-page screenshot, and an MHTML snapshot, which
+you can open offline in Chrome.
+
+### Collecting ad URLs and landing pages
+
+You can also collect data on the landing pages of ads, using the `--click_ads`
+option. There are three possible values:
+
+- `noClick` is the default value. When set to this, ads are not clicked and no
+data on the landing page or URL is collected.
+
+- `clickAndBlockLoad` will tell the crawler to click on each ad, to find the
+initial ad URL (e.g. `https://www.googleadservices.com/pagead/aclk?...`),
+but it will prevent the navigation request from loading.
+The URL will be stored in the `url` column in the `ad` table. \
+\
+This option lets you collect the URL without actually visiting the ad,
+and potentially biasing your browsing profile, or causing it to be recorded as
+a click by the ad networks. However, it also means that you do not necessarily
+see the actual landing page
+URL, which may be several steps further in a redirect chain.
+
+- `clickAndScrapeLandingPage` will tell the crawler to click on each ad, load
+the landing page, and the scrape the content of the landing page. The initial
+ad url will be stored in the `url` column in the `ad` table, and the landing page
+url will be stored in the `url` column of the `page` table, and that page will
+have a reference to the ad it was linked from in the `referrer_ad` column.\
+\
+This option gives you the content of the landing page and it's URL. However,
+it does mean that your browsing profile will be biased by this ad click.
+Additionally, consider that this is recorded as a real ad engagement, which
+may cause your crawler be flagged as a bot for performing fraudulent clicks.
+
+### Using profiles
+
+You can specify the browsing profile used by the crawler, using the
+`---profile_dir` option. This directly sets the `--user_data_dir` option
+for Chromium, which is the folder Chrome uses to store persistent storage, like
+cookies and history. If no profile is specified, it will create a temporary
+profile in `/tmp`. If the folder specified does not exist, it will be automatically
+created.
+
+Warning: if the browser crashes during a crawl, it may corrupt the profile
+directory.
+
+### Advanced example: collecting ads and landing pages in separate profiles
+
+The `--profile_dir` and `--click_ads` options can be used in conjunction
+to collect landing page data without biasing the profile that the ads
+are collected from by clicking on the ads.
+
+First, crawl your crawl list using `--click_ads clickAndBlockLoad`. This
+gets the URLs of the ads without loading them.
+
+```sh
+node gen/crawler-cli.js \
+    --name ad_crawl \
+    --profile_dir /path/to/ad_scraping/profile
+    --output_dir /path/to/your/output/dir \
+    --crawl_list /path/to/your/crawl/list \
+    --pg_conf_file /path/to/your/postgres/config \
+    --scrape_ads \
+    --click_ads=clickAndBlockLoad
+```
+
+Then, get a list of ad URLs using a SQL query:
+
+```sql
+\copy (SELECT id AS ad_id, url FROM ad WHERE ad.crawl_id=<crawl_id> AND url IS NOT NULL) to ad_urls.csv csv header;
+```
+
+This returns a CSV with the columns ad_id and url. This can be used as a crawl
+list using the special option, `--crawl_list_with_referrer_ads`. This associates
+each URL in the crawl list as the landing page for the given ad id, so the
+landing page screenshots will be stored in the same folder as the ad, and the
+database entries for the landing pages will have the correct referrer ad.
+
+So using `ad_urls.csv`, run a second crawl with a different profile, and
+with `--scrape_site` to capture the landing page content, and `--crawl_list_with_referrer_ads`
+instead of `--crawl_list`.
+
+```sh
+node gen/crawler-cli.js \
+    --name example_crawl_name \
+    --profile_dir /path/to/landing_page_scraping/profile
+    --output_dir /path/to/your/output/dir \
+    --crawl_list_with_referrer_ads /path/to/ad_urls.csv \
+    --pg_conf_file /path/to/your/postgres/config \
+    --scrape_site \
+    --click_ads=noClick
+```
+
+### Resuming a failed crawl
+
+If the crawl terminates unexpectedly for some reason, you can resume the crawl
+where it left off, by adding the `--crawl_id` flag, with the id of the crawl
+in the database. The crawler records how much progress was made in the
+crawl list, and will pick up where it left off. You must provide the same
+crawl list with the same filename and length.
+
+You can find the id of the crawl by querying the `crawl` table in Postgres.
+
+```SQL
+SELECT * FROM crawl;
+```
+
+```sh
+node gen/crawler-cli.js \
+    --crawl_id 24
+    --name example_crawl_name \
+    --output_dir /path/to/your/output/dir \
+    --crawl_list /path/to/your/crawl/list \
+    --pg_conf_file /path/to/your/postgres/config \
+    --scrape_ads \
+    --scrape_site \
+    --click_ads=noClick
+```
+
+### Other command line options
+
+For documentation of other command line options, use the `--help` option.
+
+```sh
+node gen/crawler-cli.js --help
+```
+
+## Parallel crawls with `crawl-coordinator`
+
+Using `crawl-coordinator`, you can orchestrate a job with parallel crawler
+instances. You can set up parallel profile-based crawls, where each
+instance has a separate profile and separate crawl list, or totally isolated
+crawls, where each item in the crawl list is visited by a fresh profile.
+`crawl-coordinator` automatically creates a queue of crawls and runs as many
+parallel workers as you specify.
+
+`crawl-coordinator` is currently undergoing a rewrite, and will be made
+available in a future release.
+
+<!--
 ### Setup
 
 First, to run crawl-coordinator, you must run a Postgres database in a Docker
-container, connected to a Docker bridge network called `adscraper`. 
-For instructions, please read the section titled "Setup (for Docker-based 
+container, connected to a Docker bridge network called `adscraper`.
+For instructions, please read the section titled "Setup (for Docker-based
 crawls)" in [db/README.md](db/README.md).
 
-Next, install dependencies and compile the code in both 
+Next, install dependencies and compile the code in both
 `crawl-coordinator` and `crawler`.
 
 ```
@@ -170,12 +339,11 @@ npm install
 npm run build
 ```
 
-**Note for Windows users:** Ensure that `crawler/start.sh` has Unix-style LF 
+**Note for Windows users:** Ensure that `crawler/start.sh` has Unix-style LF
 line endings, and not Windows-style CRLF line endings, before building
-the crawler image (`npm run build:docker`). If your Git is configured to 
-check out files with CRLF endings, you may have to do this manually. I use 
+the crawler image (`npm run build:docker`). If your Git is configured to
+check out files with CRLF endings, you may have to do this manually. I use
 Notepad++ -> Edit -> EOL Conversion -> LF.
-
 
 ### Commands
 The main script for the basic, CLI-based crawler is the Typescript
@@ -193,7 +361,7 @@ This will show the command line options.
 
 ### Example
 
-First, we create a Postgres database in Docker, per instructions in 
+First, we create a Postgres database in Docker, per instructions in
 [db/README.md](db/README.md), if you have not already.
 ```sh
 docker pull postgres:13
@@ -340,4 +508,4 @@ import { Client } from 'node-postgres';
 ```
 
 For now, the script needs to go in the crawler directory - in the future, we may
-make this available as a npm library.
+make this available as a npm library. -->
