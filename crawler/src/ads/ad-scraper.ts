@@ -412,6 +412,10 @@ function getPrebidBidsForAd(ad: ElementHandle) {
       }
       const match = matches[0];
 
+      if (!bidResponses[match].bids) {
+        return { max_bid_price: undefined, winning_bid: undefined };
+      }
+
       return {
         max_bid_price: Math.max(...bidResponses[match].bids.map((b: any) => b.cpm)),
         winning_bid: false

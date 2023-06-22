@@ -260,7 +260,7 @@ export async function crawl(flags: CrawlerFlags) {
         log.error(e);
       } finally {
         await seedPage.close();
-        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i, CRAWL_ID])
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID])
       }
     }
     await BROWSER.close();
@@ -338,14 +338,12 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
 
 async function scrollDownPage(page: Page) {
   let innerHeight = await page.evaluate(() => window.innerHeight);
-  let scrollTop = await page.evaluate(() => document.body.scrollTop);
+  let scrollY = await page.evaluate(() => window.scrollY);
   let scrollHeight = await page.evaluate(() => document.body.scrollHeight);
   let i = 0;
-  while (scrollTop + innerHeight < scrollHeight && i < 20) {
-    // Perform a random scroll on the Y axis, can
-    // be called at regular intervals to surface content on
-    // pages
 
+  // Scroll until at the bottom of the page or 30 iterations pass
+  while (scrollY + innerHeight < scrollHeight && i < 30) {
     // set a screen position to scroll from
     let xloc = randrange(50, 100);
     let yloc = randrange(50, 100);
@@ -357,9 +355,9 @@ async function scrollDownPage(page: Page) {
     await page.mouse.wheel({ deltaY: ydelta });
     await sleep(1000);
 
-    innerHeight = await page.evaluate(() => window.innerHeight);
-    scrollTop = await page.evaluate(() => document.body.scrollTop);
-    scrollHeight = await page.evaluate(() => document.body.scrollHeight);
+    // innerHeight = await page.evaluate(() => window.innerHeight);
+    scrollY = await page.evaluate(() => window.scrollY);
+    // scrollHeight = await page.evaluate(() => document.body.scrollHeight);
     i += 1;
   }
 }
