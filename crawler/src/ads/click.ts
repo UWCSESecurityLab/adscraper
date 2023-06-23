@@ -100,7 +100,7 @@ export function clickAd(
               ctPage = newPage;
               log.debug(`${newPage.url()}: Loading and scraping popup page`);
               await newPage.goto(req.url(), { referer: req.headers().referer });
-              await sleep(5000);
+              await sleep(PAGE_SLEEP_TIME);
               await scrapePage(newPage, {
                 pageType: PageType.LANDING,
                 referrerPage: pageId,
@@ -219,7 +219,7 @@ export function clickAd(
           // injectDOMListener(newPage);
           newPage.on('load', async () => {
             try {
-              await sleep(5000);
+              await sleep(PAGE_SLEEP_TIME);
               await scrapePage(newPage, {
                 pageType: PageType.LANDING,
                 referrerPage: pageId,

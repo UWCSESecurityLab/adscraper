@@ -156,11 +156,11 @@ export async function crawl(flags: CrawlerFlags) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (path.basename(prevCrawl.rows[0].crawl_list) !== path.basename(FLAGS.crawlListFile)) {
+    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(FLAGS.crawlListFile)) {
       console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(FLAGS.crawlListFile)}`);
       process.exit(1);
     }
-    if (prevCrawl.rows[0].crawl_list_length !== crawlList.length) {
+    if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
       console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
       process.exit(1);
     }
@@ -295,6 +295,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
   //   await domMonitor.injectDOMListener(page);
   // }
   await page.goto(url, { timeout: 120000 });
+  await sleep(PAGE_SLEEP_TIME);
   log.info(`${url}: Page finished loading`)
   await scrollDownPage(page);
 
