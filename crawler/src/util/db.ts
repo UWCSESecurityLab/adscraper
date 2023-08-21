@@ -64,6 +64,14 @@ export interface Page {
   referrer_ad?: number
 }
 
+export interface WebRequest {
+  timestamp: Date,
+  parent_page: number,
+  initiator: string,
+  target_url: string,
+  resource_type: string
+}
+
 /**
  * Wrapper over the postgres client for inserting data from the crawler.
  * Singleton class - call initialize() at the beginning, call getInstance()
@@ -238,5 +246,12 @@ export default class DbClient {
     await insertDomains(iframeSrcs, `${iframeId ? 'subframe_': ''}iframe_src`);
     await insertDomains(scriptSrcs, `${iframeId ? 'subframe_' : ''}script_src`);
     await insertDomains(imgSrcs, `${iframeId ? 'subframe_' : ''}img_src`)
+  }
+
+  async archiveRequest(request: WebRequest) {
+    await this.insert({
+      table: 'request',
+      data: request
+    });
   }
 }

@@ -154,14 +154,12 @@ CREATE TABLE iframe (
 );
 CREATE INDEX iframe_ad_id_index ON iframe(parent_ad);
 
-CREATE TABLE ad_domain (
+CREATE TABLE request (
   id SERIAL PRIMARY KEY,
-  ad_id INTEGER REFERENCES ad(id),
-  iframe_id INTEGER REFERENCES iframe(id),
-  url TEXT,
-  hostname TEXT,
-  type TEXT
+  timestamp TIMESTAMPTZ,
+  parent_page INTEGER REFERENCES page(id),
+  initiator TEXT,
+  target_url TEXT,
+  resource_type TEXT,
+  sec_fetch_site TEXT
 );
-CREATE INDEX ad_domain_ad_id_index ON ad_domain(ad_id);
-
-

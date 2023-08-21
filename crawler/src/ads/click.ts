@@ -1,4 +1,4 @@
-import { ElementHandle, Page } from "puppeteer";
+import { ElementHandle, HTTPRequest, Page } from "puppeteer";
 import * as log from '../util/log.js';
 import { injectDOMListener } from "./dom-monitor.js";
 import { PageType, scrapePage } from "../pages/page-scraper.js";
@@ -23,6 +23,11 @@ export function clickAd(
   pageId: number,
   crawlListUrl: string) {
   return new Promise<void>(async (resolve, reject) => {
+    // Create references to event listeners, so that we can remove them in the
+    // catch block if this part crashes.
+    let interceptNavigations: ((req: HTTPRequest) => void) | undefined;
+    let interceptPopups: ((newPage: Page) => void) | undefined;
+
     try {
       // Reference to any new tab that is opened, that can be called in the
       // following timeout if necessary.
@@ -30,10 +35,7 @@ export function clickAd(
 
       // Before clicking, set up various event listeners to catch what happens
       // when the ad is clicked.
-
-      // First, turn on request interception to enable catching popups and
-      // navigations.
-      await page.setRequestInterception(true);
+      // let blockNavigations: (req: HTTPRequest) => Promise<void>;
 
       // Set up a Chrome DevTools session (used later for popup interception)
       const cdp = await BROWSER.target().createCDPSession();
@@ -45,8 +47,12 @@ export function clickAd(
           autoAttach: false,
           flatten: true
         });
-        page.removeAllListeners();
-        await page.setRequestInterception(false);
+        if (interceptNavigations) {
+          page.off('request', interceptNavigations);
+        }
+        if (interceptPopups) {
+          page.off('popup', interceptPopups);
+        }
       }
 
       // Create timeout for processing overall clickthrough (including the landing page).
@@ -73,59 +79,64 @@ export function clickAd(
       // current tab to the ad's landing page. If this happens,
       // block the navigation, and then decide what to do based on what
       // the crawl job config says.
-      page.on('request', async (req) => {
-        // Block navigation requests only if they are in in the top level frame
-        // (iframes can also trigger this event).
-        if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
-          // Stop the navigation from happening.
-          await req.abort('aborted');
-          clearTimeout(clickTimeout);
+      // Note: request interception is already enabled for all pages crawled,
+      // set in src/crawler.ts.
+      interceptNavigations = (req: HTTPRequest) => {
+        (async () => {
+          // Block navigation requests only if they are in in the top level frame
+          // (iframes can also trigger this event).
+          if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+            // Stop the navigation from happening.
+            await req.abort('aborted', 1);
+            clearTimeout(clickTimeout);
 
-          // Save the ad URL in the database.
-          let db = DbClient.getInstance();
-          await db.postgres.query('UPDATE ad SET url=$2 WHERE id=$1', [adId, req.url()]);
+            // Save the ad URL in the database.
+            let db = DbClient.getInstance();
+            await db.postgres.query('UPDATE ad SET url=$2 WHERE id=$1', [adId, req.url()]);
 
-          if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
-            // If blocking ads from loading, clean up the tab and continue.
-            log.verbose(`${page.url()} Intercepted and blocked ad (navigation): ${req.url()}`);
-            await cleanUp();
-            resolve();
-            return;
-          } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
-            // Open the blocked URL in a new tab, so that we can keep the previous
-            // one open.
-            log.verbose(`${page.url()} Blocked attempted navigation to ${req.url}`);
-            let newPage = await BROWSER.newPage();
-            try {
-              ctPage = newPage;
-              log.debug(`${newPage.url()}: Loading and scraping popup page`);
-              await newPage.goto(req.url(), { referer: req.headers().referer });
-              await sleep(PAGE_SLEEP_TIME);
-              await scrapePage(newPage, {
-                pageType: PageType.LANDING,
-                referrerPage: pageId,
-                referrerPageUrl: page.url(),
-                crawlListUrl: crawlListUrl,
-                referrerAd: adId
-              });
-              clearTimeout(timeout);
-              resolve();
-            } catch (e) {
-              reject(e);
-            } finally {
-              await newPage.close();
+            if (FLAGS.scrapeOptions.clickAds == 'clickAndBlockLoad') {
+              // If blocking ads from loading, clean up the tab and continue.
+              log.verbose(`${page.url()} Intercepted and blocked ad (navigation): ${req.url()}`);
               await cleanUp();
+              resolve();
+              return;
+            } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
+              // Open the blocked URL in a new tab, so that we can keep the previous
+              // one open.
+              log.verbose(`${page.url()} Blocked attempted navigation to ${req.url}`);
+              let newPage = await BROWSER.newPage();
+              try {
+                ctPage = newPage;
+                log.debug(`${newPage.url()}: Loading and scraping popup page`);
+                await newPage.goto(req.url(), { referer: req.headers().referer });
+                await sleep(PAGE_SLEEP_TIME);
+                await scrapePage(newPage, {
+                  pageType: PageType.LANDING,
+                  referrerPage: pageId,
+                  referrerPageUrl: page.url(),
+                  crawlListUrl: crawlListUrl,
+                  referrerAd: adId
+                });
+                clearTimeout(timeout);
+                resolve();
+              } catch (e) {
+                reject(e);
+              } finally {
+                await newPage.close();
+                await cleanUp();
+              }
+            }
+          } else {
+            try {
+              // Allow other unrelated requests through
+              await req.continue(undefined, 1);
+            } catch (e: any) {
+              log.error(e);
             }
           }
-        } else {
-          try {
-            // Allow other unrelated requests through
-            await req.continue();
-          } catch (e: any) {
-            log.error(e);
-          }
-        }
-      });
+        })();
+      };
+      page.on('request', interceptNavigations);
 
       // Next, handle the case where the ad opens a popup. We have two methods
       // for handling this, depending on the desired click behavior.
@@ -210,7 +221,7 @@ export function clickAd(
       // If we want to allow the popup to load, we can listen for the popup
       // event in puppeteer and use that page.
       if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
-        page.on('popup', (newPage) => {
+        interceptPopups = (newPage) => {
           clearTimeout(clickTimeout);
 
           // If the ad click opened a new tab/popup, start crawling in the new tab.
@@ -238,7 +249,8 @@ export function clickAd(
               await cleanUp();
             }
           });
-        });
+        }
+        page.on('popup', interceptPopups);
       }
 
       // Finally click the ad
@@ -249,8 +261,12 @@ export function clickAd(
     } catch (e: any) {
       log.error(e);
       reject(e);
-      page.removeAllListeners();
-      await page.setRequestInterception(false);
+      if (interceptNavigations) {
+        page.off('request', interceptNavigations);
+      }
+      if (interceptPopups) {
+        page.off('popup', interceptPopups);
+      }
     }
   });
 }

@@ -2,13 +2,13 @@ import fs from 'fs';
 import { ClientConfig } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
 import puppeteerExtra from 'puppeteer-extra';
-import { Browser, Page } from 'puppeteer';
+import { Browser, HTTPRequest, Page } from 'puppeteer';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
 import * as domMonitor from './ads/dom-monitor.js';
 import { findArticle, findPageWithAds } from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
-import DbClient from './util/db.js';
+import DbClient, { WebRequest } from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
@@ -43,7 +43,8 @@ export interface CrawlerFlags {
     scrapeSite: boolean,
     scrapeAds: boolean,
     clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage',
-    screenshotAdsWithContext: boolean
+    screenshotAdsWithContext: boolean,
+    captureThirdPartyRequests: boolean
   }
 };
 
@@ -67,7 +68,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
   // How long the crawler should wait for something to happen after clicking an ad
   globalThis.AD_CLICK_TIMEOUT = 10 * 1000;  // 10s
   // How long the crawler can spend waiting for the HTML of a page.
-  globalThis.PAGE_CRAWL_TIMEOUT = 60 * 1000;  // 1min
+  globalThis.PAGE_CRAWL_TIMEOUT = 180 * 1000;  // 3min
   // How long the crawler can spend waiting for the HTML and screenshot of an ad.
   // must be greater than |AD_SLEEP_TIME|
   globalThis.AD_CRAWL_TIMEOUT = 20 * 1000;  // 20s
@@ -294,6 +295,40 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
   // if (FLAGS.scrapeOptions.scrapeAds) {
   //   await domMonitor.injectDOMListener(page);
   // }
+
+  // Set up request interception for capturing third party requests
+  await page.setRequestInterception(true);
+  let requests: WebRequest[] = [];
+  const captureThirdPartyRequests = async (request: HTTPRequest) => {
+    // Exit if request capture is disabled
+    if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
+      request.continue(undefined, 2);
+      return;
+    }
+
+    // Exit if request is navigating this tab
+    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+      request.continue(undefined, 2);
+      return;
+    }
+
+    // Exclude same origin requests
+    if (new URL(request.url()).origin == new URL(page.url()).origin) {
+      request.continue(undefined, 2);
+      return;
+    }
+
+    requests.push({
+      timestamp: new Date(),
+      parent_page: -1, // placeholder
+      initiator: page.url(),
+      target_url: request.url(),
+      resource_type: request.resourceType(),
+    });
+    request.continue(undefined, 2);
+  };
+  page.on('request', captureThirdPartyRequests);
+
   await page.goto(url, { timeout: 120000 });
   await sleep(PAGE_SLEEP_TIME);
   log.info(`${url}: Page finished loading`)
@@ -330,6 +365,21 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
       parentPageId: pageId,
     });
   }
+
+  // Save third party requests
+  if (FLAGS.scrapeOptions.captureThirdPartyRequests) {
+    log.info(`${url}: Saving same-site and cross-site requests`);
+    const db = DbClient.getInstance();
+    for (let request of requests) {
+      request.parent_page = pageId;
+      await db.archiveRequest(request);
+    }
+  }
+
+  // Clean up event listeners
+  page.removeAllListeners('request');
+  await page.setRequestInterception(false);
+
   return pageId;
 }
 

@@ -149,6 +149,12 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'scrapeOptions'
   },
   {
+    name: 'capture_third_party_request_urls',
+    type: Boolean,
+    description: 'If included, the crawler will capture the URLs of any third-party requests made by websites (can be used for measuring tracking in conjunction with a tracker URL list).',
+    group: 'scrapeOptions'
+  },
+  {
     name: 'click_ads',
     type: String,
     description: 'Specify whether to click on ads. Must be one of: noClick, clickAndBlockLoad, or clickAndScrapeLandingPage. If noClick, no ads will be clicked. If "clickAndBlockLoad", the ads will be clicked, but prevented from loading, and the initial URL of the ad will be stored in the database. If "clickAdAndScrapeLandingPage", ads will be clicked, and the landing page content will be scraped. The --scrape_ads arg must also be used. Default: "noClick"',
@@ -311,6 +317,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         scrapeAds: Boolean(options.scrape_ads),
         clickAds: options.click_ads,
         screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
+        captureThirdPartyRequests: Boolean(options.capture_third_party_request_urls)
       },
     });
     console.log('Crawl succeeded');
