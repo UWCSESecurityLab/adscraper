@@ -5,6 +5,9 @@ import os from 'os';
 import sourceMapSupport from 'source-map-support';
 import * as crawler from './crawler.js';
 import { LogLevel } from './util/log.js';
+
+console.log(process.argv);
+
 sourceMapSupport.install();
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
@@ -116,6 +119,12 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     name: 'profile_dir',
     type: String,
     description: 'Directory of the profile (user data directory) that Puppeteer should use for this crawl (Optional). Provide this if you want a profile that can be reused between crawls. If not provided (for stateless crawls), uses a new, empty profile.',
+    group: 'chromeOptions'
+  },
+  {
+    name: 'executable_path',
+    type: String,
+    description: 'Path to the Chrome executable to use for this crawl (Optional). If not provided, uses the default Puppeteer executable.',
     group: 'chromeOptions'
   },
   {
@@ -304,6 +313,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       chromeOptions: {
         headless: headless,
         profileDir: options.profile_dir,
+        executablePath: options.executable_path
       },
 
       crawlOptions: {

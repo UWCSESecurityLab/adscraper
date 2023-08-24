@@ -31,6 +31,7 @@ export interface CrawlerFlags {
   chromeOptions: {
     profileDir?: string,
     headless: boolean | 'new',
+    executablePath?: string
   }
 
   crawlOptions: {
@@ -179,7 +180,8 @@ export async function crawl(flags: CrawlerFlags) {
     defaultViewport: VIEWPORT,
     headless: FLAGS.chromeOptions.headless,
     handleSIGINT: false,
-    userDataDir: FLAGS.chromeOptions.profileDir
+    userDataDir: FLAGS.chromeOptions.profileDir,
+    executablePath: FLAGS.chromeOptions.executablePath
   });
 
   process.on('SIGINT', async () => {
