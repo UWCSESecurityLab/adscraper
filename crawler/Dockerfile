@@ -32,14 +32,16 @@ RUN npx tsc \
 # Run everything after as non-privileged user.
 USER pptruser
 
-CMD ["node", "gen/crawler-cli.js", \
-  "--executable_path", "/usr/bin/google-chrome", \
-  "--output_dir", "/crawler/data", \
-  "--name", "docker_test", \
-  "--crawl_list", "target_sites.txt", \
-  "--pg_conf_file", "pg_creds.json", \
-  "--click_ads", "clickAndBlockLoad", \
-  "--scrape_ads"]
+# TODO: Insert this before running the crawler to pull items off the MQ
+#  /usr/bin/amqp-consume --url=$BROKER_URL -q $QUEUE -c 1
+ENTRYPOINT [ "node", "gen/crawler-cli.js"]
+# CMD ["--executable_path=/usr/bin/google-chrome"]
+  # "--output_dir", "/crawler/data", \
+  # "--name", "docker_test", \
+  # "--crawl_list", "target_sites.txt", \
+  # "--pg_conf_file", "pg_creds.json", \
+  # "--click_ads", "clickAndBlockLoad", \
+  # "--scrape_ads"]
 
 # Commands for building/running
 # docker build . -t adscraper --platform linux/amd64
