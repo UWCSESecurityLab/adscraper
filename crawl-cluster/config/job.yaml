@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adscraper-job
+spec:
+  # These values will be overriden by the job runner
+  parallelism: 4 # maxWorkers
+  completions: 8 # Number of crawl jobs
+  template:
+    metadata:
+      name: adscraper-job
+    spec:
+      containers:
+        - name: c
+          image: mock-crawler
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BROKER_URL
+              value: amqp://guest:guest@rabbitmq-service:5672
+            - name: QUEUE
+              value: job1
+            - name: PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conf-secret
+                  key: database
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conf-secret
+                  key: user
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-conf-secret
+                  key: password
+      restartPolicy: OnFailure
