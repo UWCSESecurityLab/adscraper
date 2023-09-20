@@ -21,7 +21,9 @@ let pgConf: ClientConfig = {
   database: 'adscraper'
 }
 
-const BROKER_URL = 'amqp://guest:guest@127.0.0.1:52905';
+// Minikube: replace URL (after @) with IP and port provided by
+// minikube service rabbitmq-service --url
+const BROKER_URL = 'amqp://guest:guest@127.0.0.1:57101';
 const QUEUE = 'job1';
 
 // console.log(pgConf);
