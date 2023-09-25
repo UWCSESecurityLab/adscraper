@@ -27,6 +27,11 @@ Adscraper is a Node.js script that uses the
 browse and collect ad data. You can use the crawler via the command line to
 crawl a single site, or you can use it as part of your own Node.JS script.
 
+The adscraper **crawl-cluster** uses Kubernetes to orchestrate
+crawls across multiple crawler instances. This allows multiple crawls to be
+queued and run in parallel across multiple nodes in a Kubernetes cluster.
+This useful if you plan to run many crawls across different browsing profiles.
+
 ### Research using adscraper
 
 adscraper has been used to conduct research measuring and auditing the online
