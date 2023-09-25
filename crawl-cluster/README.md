@@ -19,7 +19,7 @@
    - Production: TODO
 
 2. Set up worker nodes
-    - Local: `minikube node --add worker` (do 2x)
+    - Local: `minikube node add worker` (do 2x)
     - Production: TODO
 
 3. Set up a location for storing input and output files - to be mounted to containers
@@ -109,3 +109,5 @@ On the control plane node, run `node runjob.js` with the job specification file.
 - Figure out the crawlspec that goes into the message queue
 - Write the interface for running containers from crawlspecs
 - Figure out the command to run the crawl container
+
+

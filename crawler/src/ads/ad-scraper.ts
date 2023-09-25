@@ -197,7 +197,6 @@ export async function scrapeAd(ad: ElementHandle,
       // Scrape ad content
       const adContent = await scrapeAdContent(
         page, ad, adsDir,
-        FLAGS.crawlerHostname,
         FLAGS.scrapeOptions.screenshotAdsWithContext,
         adId);
 
@@ -269,8 +268,6 @@ async function scrapeAdContent(
   page: Page,
   ad: ElementHandle,
   screenshotDir: string,
-  // externalScreenshotDir: string | undefined,
-  screenshotHost: string,
   withContext: boolean,
   adId?: number): Promise<ScrapedAd> {
 
@@ -354,7 +351,6 @@ async function scrapeAdContent(
   return {
     timestamp: new Date(),
     screenshot: screenshotFailed ? undefined : savePath,
-    screenshot_host: screenshotFailed ? undefined : screenshotHost,
     html: html,
     max_bid_price: prebid?.max_bid_price,
     winning_bid: prebid?.winning_bid,

@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:18
+FROM --platform=linux/amd64 node:20
 
 # We don't need the standalone Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD true
@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install gnupg wget -y && \
   wget --quiet --output-document=- https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor > /etc/apt/trusted.gpg.d/google-archive.gpg && \
   sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list' && \
   apt-get update && \
-  apt-get install google-chrome-stable -y --no-install-recommends && \
+  apt-get install -y curl ca-certificates amqp-tools google-chrome-stable \
+     --no-install-recommends && \
   rm -rf /var/lib/apt/lists/*
 
 
@@ -17,10 +18,11 @@ RUN apt-get update && apt-get install gnupg wget -y && \
 # same layer as npm install to keep re-chowned files from using up several hundred MBs more space
 
 WORKDIR /crawler
-COPY package.json /crawler
-RUN npm install
+COPY package*.json /crawler
+RUN npm install --loglevel verbose
 COPY . /crawler
 RUN npx tsc \
+    && npx typescript-json-schema ./tsconfig.json CrawlerFlags > gen/crawlerFlagsSchema.json \
     && mkdir /crawler/data \
     && groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
@@ -32,9 +34,11 @@ RUN npx tsc \
 # Run everything after as non-privileged user.
 USER pptruser
 
-# TODO: Insert this before running the crawler to pull items off the MQ
-#  /usr/bin/amqp-consume --url=$BROKER_URL -q $QUEUE -c 1
-ENTRYPOINT [ "node", "gen/crawler-cli.js"]
+# Pulls the next crawl spec off of the message queue.
+# BROKER_URL and QUEUE specified in the k8s job config.
+CMD /usr/bin/amqp-consume --url=$BROKER_URL -q $QUEUE -c 1 node gen/crawler-amqp.js
+
+# ENTRYPOINT [ "node", "gen/crawler-cli.js"]
 # CMD ["--executable_path=/usr/bin/google-chrome"]
   # "--output_dir", "/crawler/data", \
   # "--name", "docker_test", \

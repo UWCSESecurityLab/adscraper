@@ -56,13 +56,6 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'crawler_hostname',
-    type: String,
-    description: 'The hostname of this crawler (Optional). Defaults to "os.hostname()", but if this crawler is being run in a Docker container, you must manually supply the hostname of the Docker host to correctly tag screenshots.',
-    defaultValue: os.hostname(),
-    group: 'main'
-  },
-  {
     name: 'log_level',
     type: String,
     description: 'Sets the level of logging verbosity. Choose one of the following: error > warning > info > debug > verbose. Defaults to "info"',
@@ -300,11 +293,9 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 (async function() {
   try {
     await crawler.crawl({
-      name: options.name,
+      crawlName: options.name,
       jobId: options.job_id,
       outputDir: options.output_dir,
-      pgConf: pgConf,
-      crawlerHostname: options.crawler_hostname,
       crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
       crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
       crawlId: options.crawl_id,
@@ -318,8 +309,8 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 
       crawlOptions: {
         shuffleCrawlList: Boolean(options.shuffleCrawlList),
-        crawlAdditionalArticlePage: Boolean(options.crawl_article),
-        crawlAdditionalPageWithAds: Boolean(options.crawl_page_with_ads),
+        findAndCrawlArticlePage: Boolean(options.crawl_article),
+        findAndCrawlPageWithAds: Boolean(options.crawl_page_with_ads),
       },
 
       scrapeOptions: {
@@ -329,7 +320,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
         captureThirdPartyRequests: Boolean(options.capture_third_party_request_urls)
       },
-    });
+    }, pgConf);
     console.log('Crawl succeeded');
     process.exit(0);
   } catch (e: any) {

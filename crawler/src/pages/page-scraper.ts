@@ -21,7 +21,6 @@ interface ScrapedPage {
   html: string,
   mhtml: string,
   screenshot: string,
-  screenshot_host: string,
 }
 
 /**
@@ -84,7 +83,6 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
       const scrapedPage = await scrapePageContent(
         page,
         pagesDir,
-        FLAGS.crawlerHostname,
         filename);
 
       pageId = await db.archivePage({
@@ -122,8 +120,6 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
 async function scrapePageContent(
   page: Page,
   outputDir: string,
-  // externalScreenshotDir: string | undefined,
-  screenshotHost: string,
   outputFilename?: string): Promise<ScrapedPage> {
   try {
     const filename = outputFilename ? outputFilename : uuidv4();
@@ -160,7 +156,6 @@ async function scrapePageContent(
       html: htmlFile,
       mhtml: mhtmlFile,
       screenshot: screenshotFile,
-      screenshot_host: screenshotHost
     };
   } catch (e) {
     throw e;

@@ -1,5 +1,8 @@
 
-console.log(process.argv[2]);
+process.stdin.on('data', data => {
+  console.log(data.toString());
+});
+
 setTimeout(() => {
   process.exit(0);
 }, 5000);

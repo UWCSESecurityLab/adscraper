@@ -22,7 +22,7 @@ export function error(e: Error) {
     message: e.message,
     stack: e.stack
   }
-  if (FLAGS.logLevel >= LogLevel.ERROR) {
+  if (LOG_LEVEL >= LogLevel.ERROR) {
     printLog(jsonLog, chalk.red);
   }
   writeLog(jsonLog);
@@ -34,7 +34,7 @@ export function strError(message: string) {
     level: 'ERROR',
     message: message
   }
-  if (FLAGS.logLevel >= LogLevel.ERROR) {
+  if (LOG_LEVEL >= LogLevel.ERROR) {
     printLog(jsonLog, chalk.red);
   }
   writeLog(jsonLog);
@@ -46,7 +46,7 @@ export function warning(message: string) {
     level: 'WARNING',
     message: message
   }
-  if (FLAGS.logLevel >= LogLevel.WARNING) {
+  if (LOG_LEVEL >= LogLevel.WARNING) {
     printLog(jsonLog, chalk.yellow);
   }
   writeLog(jsonLog);
@@ -58,7 +58,7 @@ export function info(message: string) {
     level: 'INFO',
     message: message
   }
-  if (FLAGS.logLevel >= LogLevel.INFO) {
+  if (LOG_LEVEL >= LogLevel.INFO) {
     printLog(jsonLog, chalk.whiteBright);
   }
   writeLog(jsonLog);
@@ -70,7 +70,7 @@ export function debug(message: string) {
     level: 'DEBUG',
     message: message
   }
-  if (FLAGS.logLevel >= LogLevel.DEBUG) {
+  if (LOG_LEVEL >= LogLevel.DEBUG) {
     printLog(jsonLog, chalk.whiteBright.dim);
     writeLog(jsonLog);
   }
@@ -82,7 +82,7 @@ export function verbose(message: string) {
     level: 'VERBOSE',
     message: message
   }
-  if (FLAGS.logLevel >= LogLevel.VERBOSE) {
+  if (LOG_LEVEL >= LogLevel.VERBOSE) {
     printLog(jsonLog, chalk.white.dim);
     writeLog(jsonLog);
   }
@@ -95,7 +95,7 @@ function writeLog(l: { ts: string, level: string, message: string, stack?: strin
       fs.mkdirSync(logDir, { recursive: true });
     }
     let dateStr = dayjs().format();
-    logPath = path.resolve(logDir, `crawl_${dateStr}_${FLAGS.name}.txt`);
+    logPath = path.resolve(logDir, `crawl_${dateStr}_${FLAGS.crawlName}.txt`);
   }
 
   const log = formatLog(l);

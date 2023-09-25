@@ -1,32 +1,30 @@
+import csvParser from 'csv-parser';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { ClientConfig } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
-import puppeteerExtra from 'puppeteer-extra';
 import { Browser, HTTPRequest, Page } from 'puppeteer';
+import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
-import * as domMonitor from './ads/dom-monitor.js';
+import { scrapeAdsOnPage } from './ads/ad-scraper.js';
 import { findArticle, findPageWithAds } from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
 import DbClient, { WebRequest } from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
-import { scrapeAdsOnPage } from './ads/ad-scraper.js';
-import path from 'path';
-import csvParser from 'csv-parser';
 
 sourceMapSupport.install();
 
 export interface CrawlerFlags {
-  name?: string,
+  crawlName?: string,
   jobId: number,
-  crawlId: number,
+  crawlId?: number,
   outputDir: string,
-  pgConf: ClientConfig,
-  crawlerHostname: string,
   crawlListFile: string,
   crawlListHasReferrerAds: boolean,
-  logLevel: log.LogLevel,
+  logLevel?: log.LogLevel,
 
   chromeOptions: {
     profileDir?: string,
@@ -36,8 +34,8 @@ export interface CrawlerFlags {
 
   crawlOptions: {
     shuffleCrawlList: boolean,
-    crawlAdditionalPageWithAds: boolean,
-    crawlAdditionalArticlePage: boolean
+    findAndCrawlPageWithAds: boolean,
+    findAndCrawlArticlePage: boolean
   }
 
   scrapeOptions: {
@@ -60,6 +58,7 @@ declare global {
   var PAGE_SLEEP_TIME: number;
   var VIEWPORT: { width: number, height: number}
   var CRAWL_ID: number;
+  var LOG_LEVEL: log.LogLevel;
 }
 
 function setupGlobals(crawlerFlags: CrawlerFlags) {
@@ -79,9 +78,10 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
   globalThis.PAGE_SLEEP_TIME = 10 * 1000;  // 10s
   // Size of the viewport
   globalThis.VIEWPORT = { width: 1366, height: 768 };
+  globalThis.LOG_LEVEL = crawlerFlags.logLevel ? crawlerFlags.logLevel : log.LogLevel.INFO;
 }
 
-export async function crawl(flags: CrawlerFlags) {
+export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   // Initialize global variables and clients
   // console.log(flags);
   setupGlobals(flags);
@@ -92,7 +92,7 @@ export async function crawl(flags: CrawlerFlags) {
     process.exit(1);
   }
 
-  const db = await DbClient.initialize(flags.pgConf);
+  const db = await DbClient.initialize(pgConf);
 
   let crawlList: string[] = [];
   let crawlListAdIds: number[] = [];
@@ -141,14 +141,14 @@ export async function crawl(flags: CrawlerFlags) {
       returning: 'id',
       data: {
         job_id: FLAGS.jobId,
-        name: FLAGS.name,
+        name: FLAGS.crawlName,
         start_time: new Date(),
         completed: false,
         crawl_list: FLAGS.crawlListFile, // path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : `Crawl ${FLAGS.crawlPrevAdLandingPages} landing pages` ),
         crawl_list_current_index: 0,
         crawl_list_length: crawlList.length,
         profile_dir: FLAGS.chromeOptions.profileDir,
-        crawler_hostname: FLAGS.crawlerHostname,
+        crawler_hostname: os.hostname(),
         crawler_ip: await getPublicIp()
       }
     }) as number;
@@ -218,7 +218,7 @@ export async function crawl(flags: CrawlerFlags) {
             }
 
             // Open additional pages (if specified) and scrape them (if specified)
-            if (FLAGS.crawlOptions.crawlAdditionalArticlePage) {
+            if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
               const articleUrl = await findArticle(seedPage);
               if (articleUrl) {
                 const articlePage = await BROWSER.newPage();
@@ -233,7 +233,7 @@ export async function crawl(flags: CrawlerFlags) {
               }
             }
 
-            if (FLAGS.crawlOptions.crawlAdditionalPageWithAds) {
+            if (FLAGS.crawlOptions.findAndCrawlPageWithAds) {
               const urlWithAds = await findPageWithAds(seedPage);
               if (urlWithAds) {
                 const adsPage = await BROWSER.newPage();

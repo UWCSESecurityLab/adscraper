@@ -2,13 +2,12 @@
   "name": "ads-crawler",
   "version": "1.0.0",
   "description": "",
-  "main": "crawler.js",
+  "main": "gen/crawler.js",
+  "types": "gen/crawler.d.ts",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "crawl": "node gen/crawler.js localhost 1",
-    "build:docker": "docker build -t puppeteer-chrome-linux .",
-    "run:docker": "docker run -i --init --rm --cap-add=SYS_ADMIN  --net adscraper --name puppeteer-chrome -v /data/screenshots:/data/screenshots puppeteer-chrome-linux",
+    "build": "tsc && npx typescript-json-schema ./tsconfig.json CrawlerFlags > gen/crawlerFlagsSchema.json",
+    "build:docker": "docker build -t crawler .",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Eric Zeng",
@@ -20,6 +19,7 @@
     "command-line-usage": "^7.0.1",
     "csv-parser": "^3.0.0",
     "dayjs": "^1.11.8",
+    "jsonschema": "^1.4.1",
     "pg": "^8.11.0",
     "public-ip": "^6.0.1",
     "puppeteer": "^21.5.2",
@@ -42,6 +42,7 @@
     "@types/uuid": "^9.0.2",
     "@types/xml2js": "^0.4.11",
     "source-map-support": "^0.5.21",
-    "typescript": "^5.1.3"
+    "typescript": "^5.1.3",
+    "typescript-json-schema": "^0.61.0"
   }
 }

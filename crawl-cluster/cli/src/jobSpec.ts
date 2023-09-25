@@ -1,5 +1,3 @@
-import { ClientConfig } from 'pg';
-
 export default interface JobSpec {
   // Unique name for your job. If this job exists in the database, it assumes it
   // is resuming a crashed job, and will look up what has been crawled, and
@@ -10,15 +8,8 @@ export default interface JobSpec {
   // or uses a directory for this job with the name of the job.
   dataDir: string;
 
-  // Postgres connection parameters
-  // pgConf: ClientConfig;
-
   // Max number of Chromium instances to run in parallel
   maxWorkers: number;
-
-  // AMQP connection parameters for crawl message queue.
-  // amqpUri: string;
-  // amqpQueue: string;
 
   // In isolated mode, you provide a single list of URLs, and each URL is
   // crawled in an isolated browser instance, with a clean profile.
@@ -33,50 +24,52 @@ export default interface JobSpec {
   // which specifies the Chromium profile name, location, and list of URLs for
   // that profile.
   crawls: ProfileCrawlList[];
-
-  crawlOptions: {
-    shuffleCrawlList: boolean;
-
-    // In addition to crawling the URL given, look for a link on the page
-    // that leads to a page with ads, and crawl that (using the same crawl settings).
-    findAndCrawlPageWithAds?: boolean;
-
-    // In addition to crawling the URL given, look for an article in the page's
-    // RSS feed, if it has one, and crawl that (using the same crawl settings).
-    // If no RSS feed exists, uses a heuristic to determine if a page is an article.
-    findAndCrawlArticlePage?: boolean;
-  }
-
-
-  scrapeOptions: {
-    // Scrape the page content. Saves a screenshot, the HTML document, and
-    // an MHTML archive.
-    scrapeSite: boolean;
-    // Scrape the ads on the page. Saves a screenshot of the ad and its HTML
-    // content.
-    scrapeAds: boolean;
-    // Whether to click on the ad or not.
-    // |noClick|: Do not click the ad
-    // |clickAndBlockLoad|: Click the ad, but prevent it from loading.
-    // This allows you to get the URL of the ad (at the beginning of the
-    // redirect chain). Useful if you want to prevent the ad click from
-    // influencing the browser's profile.
-    // |clickAndScrapeLandingPage|: Click the ad, and scrape the content of
-    // the landing page. This may affect the browsing profile.
-    clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage';
-
-    // TODO: capture third party network requests for tracking detection
-    // captureRequests: boolean;
-
-    // Capture third party URLs associated with ads in the DOM
-    // (e.g. src attributes in the ad and its iframe, scripts that modify the ad)
-    // captureDOMThirdParties: boolean;
-
-    // When scraping a screenshot of ads
-    screenshotAdsWithContext?: boolean;
-  }
+  crawlOptions: CrawlOptions;
+  scrapeOptions: ScrapeOptions;
 }
 
+interface CrawlOptions   {
+  shuffleCrawlList: boolean;
+
+  // In addition to crawling the URL given, look for a link on the page
+  // that leads to a page with ads, and crawl that (using the same crawl settings).
+  findAndCrawlPageWithAds: boolean;
+
+  // In addition to crawling the URL given, look for an article in the page's
+  // RSS feed, if it has one, and crawl that (using the same crawl settings).
+  // If no RSS feed exists, uses a heuristic to determine if a page is an article.
+  findAndCrawlArticlePage: boolean;
+}
+
+interface ScrapeOptions {
+  // Scrape the page content. Saves a screenshot, the HTML document, and
+  // an MHTML archive.
+  scrapeSite: boolean;
+  // Scrape the ads on the page. Saves a screenshot of the ad and its HTML
+  // content.
+  scrapeAds: boolean;
+  // Whether to click on the ad or not.
+  // |noClick|: Do not click the ad
+  // |clickAndBlockLoad|: Click the ad, but prevent it from loading.
+  // This allows you to get the URL of the ad (at the beginning of the
+  // redirect chain). Useful if you want to prevent the ad click from
+  // influencing the browser's profile.
+  // |clickAndScrapeLandingPage|: Click the ad, and scrape the content of
+  // the landing page. This may affect the browsing profile.
+  clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage';
+
+  // TODO: capture third party network requests for tracking detection
+  // captureRequests: boolean;
+
+  // Capture third party URLs associated with ads in the DOM
+  // (e.g. src attributes in the ad and its iframe, scripts that modify the ad)
+  // captureDOMThirdParties: boolean;
+
+  // When scraping a screenshot of ads
+  screenshotAdsWithContext: boolean;
+
+  captureThirdPartyRequests: boolean;
+}
 
 interface ProfileCrawlList {
   // User provided name for the profile

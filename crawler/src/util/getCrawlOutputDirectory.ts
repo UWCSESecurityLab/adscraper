@@ -21,7 +21,7 @@ export default async function getCrawlOutputDirectory(referrerAd?: number) {
 
   } else {
     crawlId = CRAWL_ID;
-    crawlName = FLAGS.name;
+    crawlName = FLAGS.crawlName;
   }
 
   if (crawlName) {

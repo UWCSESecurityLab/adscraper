@@ -11,8 +11,10 @@
   "license": "MIT",
   "dependencies": {
     "@kubernetes/client-node": "^0.18.1",
+    "ads-crawler": "file:../../crawler",
     "amqplib": "^0.10.3",
     "express": "^4.18.2",
+    "job-spec": "file:../../job-spec",
     "jsonschema": "^1.4.1",
     "pg": "^8.11.3"
   },
