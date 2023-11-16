@@ -9,21 +9,3 @@ spec:
     - protocol: TCP
       port: 5432
       targetPort: 5432
-# ---
-# apiVersion: discovery.k8s.io/v1
-# kind: EndpointSlice
-# metadata:
-#   name: postgres-1 # by convention, use the name of the Service as a prefix for the name of the EndpointSlice
-#   labels:
-#     # You should set the "kubernetes.io/service-name" label.
-#     # Set its value to match the name of the Service
-#     kubernetes.io/service-name: postgres
-# addressType: FQDN
-# ports:
-#   - protocol: TCP
-#     port: 5432
-#     name: ''
-#     appProtocol: postgresql
-# endpoints:
-#   - addresses:
-#       - "host.minikube.internal"

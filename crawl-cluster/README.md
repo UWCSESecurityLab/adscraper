@@ -15,7 +15,7 @@
 ## Setup
 
 1. Set up a cluster
-   - Local (Minikube): `minikube start --cni calico`
+   - Local (Minikube): `minikube start --cni calico --mount --mount-string $(pwd)/test-input:/data --driver=docker`
    - Production: TODO
 
 2. Set up worker nodes
@@ -42,7 +42,7 @@ kubectl apply -f config/postgres-service.yaml
 ```
 
 5. Set up database secrets
-    - Edit `pg-conf-secret.yaml`; provide base64-encoded values for database, user, and password.
+    - Edit `postgres-secret.yaml`; provide base64-encoded values for database, user, and password.
       - Base64 conversion: `echo -n 'password' | base64
     - Apply config:
 
@@ -63,32 +63,6 @@ kubectl create -f config/rabbitmq-service.yaml
 kubectl create -f config/rabbitmq-controller.yaml
 ```
 
-8. Build and start the job server
-
-```sh
-cd job-server
-docker build . -t job-server
-
-# Local/Minikube: load image
-minikube image load job-server
-
-# Prod: upload image to registry
-# TODO
-```
-
-9. Set up ingress for job server
-
-```sh
-# Local/Minikube: enable ingress
-minikube addons enable ingress
-minikube addons enable ingress-dns
-minikube tunnel # keep this open
-# Ingress resources should be available at 127.0.0.1
-
-
-
-```
-
 ## Run a crawl job
 
 1. Set up directory structure in the storage volume, populate with inputs
@@ -103,11 +77,6 @@ On the control plane node, run `node runjob.js` with the job specification file.
 
 ## TODOs
 
-- Figure out the jobspec format
 - Figure out container mounts in job.yaml
 - Write a script that creates/modifies job.yaml based on the jobspec (number of crawls, mounts, etc.)
-- Figure out the crawlspec that goes into the message queue
 - Write the interface for running containers from crawlspecs
-- Figure out the command to run the crawl container
-
-
