@@ -6,7 +6,6 @@ and saves the HTML content of each ad on the page.
 
 - [adscraper: A Web Crawler for Measuring Online Ad Content](#adscraper-a-web-crawler-for-measuring-online-ad-content)
   - [Introduction](#introduction)
-    - [Components](#components)
     - [Research using adscraper](#research-using-adscraper)
     - [Warning: Research Code!](#warning-research-code)
   - [Setup](#setup)
@@ -20,24 +19,13 @@ and saves the HTML content of each ad on the page.
     - [Advanced example: collecting ads and landing pages in separate profiles](#advanced-example-collecting-ads-and-landing-pages-in-separate-profiles)
     - [Resuming a failed crawl](#resuming-a-failed-crawl)
     - [Other command line options](#other-command-line-options)
-  - [Parallel crawls with `crawl-coordinator`](#parallel-crawls-with-crawl-coordinator)
 
 ## Introduction
 
-### Components
-
-- The adscraper **crawler** is a Node.js script that uses the
+Adscraper is a Node.js script that uses the
 [puppeteer](https://github.com/puppeteer/puppeteer) library to automatically
 browse and collect ad data. You can use the crawler via the command line to
 crawl a single site, or you can use it as part of your own Node.JS script.
-
-- The adscraper **crawl-coordinator** is a script for crawling a list of
-websites, using a pool of parallel crawlers, in isolated Docker containers.
-Each crawler and browser instance, for each website, uses a new Docker container,
-meaning that each site is crawled with a "fresh" profile, with no cookies,
-application storage, or history. You can also connect crawl-coordinator to
-a Wireguard-based VPN, to tunnel crawls through a different IP address in a
-different location.
 
 ### Research using adscraper
 
@@ -320,7 +308,7 @@ For documentation of other command line options, use the `--help` option.
 node gen/crawler-cli.js --help
 ```
 
-## Parallel crawls with `crawl-coordinator`
+<!-- ## Parallel crawls with `crawl-coordinator`
 
 Using `crawl-coordinator`, you can orchestrate a job with parallel crawler
 instances. You can set up parallel profile-based crawls, where each
@@ -330,7 +318,7 @@ crawls, where each item in the crawl list is visited by a fresh profile.
 parallel workers as you specify.
 
 `crawl-coordinator` is currently undergoing a rewrite, and will be made
-available in a future release.
+available in a future release. -->
 
 <!--
 ### Setup
