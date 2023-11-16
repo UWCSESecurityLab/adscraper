@@ -155,7 +155,7 @@ export default class DbClient {
     params.push(options.id);
     const update = `UPDATE ${options.table} SET ${columns} WHERE id=$${params.length}`;
     const result = await this.postgres.query(update, params);
-    if (result.rowCount == 0) {
+    if (!result.rowCount || result.rowCount == 0) {
       log.warning(`Could not update row in table ${options.table} with id ${options.id}`);
     } else if (result.rowCount > 1) {
       log.warning(`Updated more than one row in ${options.table} with id ${options.id}`);

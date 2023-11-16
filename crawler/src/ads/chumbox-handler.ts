@@ -65,7 +65,7 @@ async function splitFirstPartyAd(
       }
       return current;
     }, parentDepth);
-    return parentHandle.asElement();
+    return parentHandle;
   }));
   let tuples: AdHandles[] = [];
   for (let i = 0; i < link.length; i++) {

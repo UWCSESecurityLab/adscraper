@@ -26,7 +26,7 @@ export function clickAd(
     // Create references to event listeners, so that we can remove them in the
     // catch block if this part crashes.
     let interceptNavigations: ((req: HTTPRequest) => void) | undefined;
-    let interceptPopups: ((newPage: Page) => void) | undefined;
+    let interceptPopups: ((newPage: Page | null) => void) | undefined;
 
     try {
       // Reference to any new tab that is opened, that can be called in the
@@ -222,6 +222,10 @@ export function clickAd(
       // event in puppeteer and use that page.
       if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
         interceptPopups = (newPage) => {
+          if (!newPage) {
+            return;
+          }
+
           clearTimeout(clickTimeout);
 
           // If the ad click opened a new tab/popup, start crawling in the new tab.
