@@ -107,7 +107,7 @@ async function main() {
     console.log('Running job...');
     const res = await batchApi.createNamespacedJob('default', job);
     console.log('Job sent to k8s successfully');
-    console.log(res);
+    console.log(res.body);
     process.exit(0);
   } catch (e) {
     console.log(e);

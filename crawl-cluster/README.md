@@ -43,7 +43,7 @@ kubectl apply -f config/postgres-service.yaml
 
 5. Set up database secrets
     - Edit `postgres-secret.yaml`; provide base64-encoded values for database, user, and password.
-      - Base64 conversion: `echo -n 'password' | base64
+      - Base64 conversion: `echo -n 'password' | base64`
     - Apply config:
 
 ```sh

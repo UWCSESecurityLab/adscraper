@@ -4,7 +4,7 @@ metadata:
   name: postgres
 spec:
   type: ExternalName
-  externalName: host.minikube.internal
+  externalName: your.domain.here
   ports:
     - protocol: TCP
       port: 5432
