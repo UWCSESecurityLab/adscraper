@@ -15,7 +15,7 @@ CREATE TABLE job (
 CREATE TABLE crawl (
   id SERIAL PRIMARY KEY,
   job_id INTEGER REFERENCES job(id),
-  name TEXT UNIQUE,
+  name TEXT,
   start_time TIMESTAMPTZ,
   completed BOOLEAN,
   completed_time TIMESTAMPTZ,
