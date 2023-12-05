@@ -40,7 +40,7 @@ export async function randomGuessPage(
     let url = sameDomainLinks.splice(idx, 1)[0];
     // log.info(`${page.url()}: Trying link ${url}`);
     try {
-      await guessPage.goto(url);
+      await guessPage.goto(url, {timeout: globalThis.PAGE_NAVIGATION_TIMEOUT});
       await sleep(1500);
       if (await guessCriteria(guessPage)) {
         // log.info(`${page.url()}: Found a page that met the criteria at ${url}`);

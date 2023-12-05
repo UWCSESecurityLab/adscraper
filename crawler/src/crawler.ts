@@ -50,8 +50,9 @@ export interface CrawlerFlags {
 declare global {
   var BROWSER: Browser;
   var FLAGS: CrawlerFlags;
-  var PAGE_CRAWL_TIMEOUT: number;
-  var AD_CRAWL_TIMEOUT: number;
+  var PAGE_NAVIGATION_TIMEOUT: number;
+  var PAGE_SCRAPE_TIMEOUT: number;
+  var AD_SCRAPE_TIMEOUT: number;
   var CLICKTHROUGH_TIMEOUT: number;
   var AD_CLICK_TIMEOUT: number;
   var AD_SLEEP_TIME: number;
@@ -64,17 +65,19 @@ declare global {
 function setupGlobals(crawlerFlags: CrawlerFlags) {
   globalThis.FLAGS = crawlerFlags;
   // How long the crawler can spend on each clickthrough page
-  globalThis.CLICKTHROUGH_TIMEOUT = 30 * 1000;  // 30s
+  globalThis.CLICKTHROUGH_TIMEOUT = 60 * 1000;  // 60s
   // How long the crawler should wait for something to happen after clicking an ad
   globalThis.AD_CLICK_TIMEOUT = 10 * 1000;  // 10s
-  // How long the crawler can spend waiting for the HTML of a page.
-  globalThis.PAGE_CRAWL_TIMEOUT = 180 * 1000;  // 3min
-  // How long the crawler can spend waiting for the HTML and screenshot of an ad.
+  // How long the crawler should wait for a page to load.
+  globalThis.PAGE_NAVIGATION_TIMEOUT = 3 * 60 * 1000;  // 3min
+  // How long the crawler can spend scraping the HTML of a page.
+  globalThis.PAGE_SCRAPE_TIMEOUT = 2 * 60 * 1000;  // 2min
+  // How long the crawler can spend scraping the HTML content and screenshot of an ad.
   // must be greater than |AD_SLEEP_TIME|
-  globalThis.AD_CRAWL_TIMEOUT = 20 * 1000;  // 20s
+  globalThis.AD_SCRAPE_TIMEOUT = 20 * 1000;  // 20s
   // How long the crawler should sleep before scraping/screenshotting an ad
   globalThis.AD_SLEEP_TIME = 5 * 1000;  // 5s
-  // How long the crawler should sleep before crawling a page
+  // How long the crawler should sleep before scraping a page
   globalThis.PAGE_SLEEP_TIME = 10 * 1000;  // 10s
   // Size of the viewport
   globalThis.VIEWPORT = { width: 1366, height: 768 };
@@ -248,7 +251,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
               }
             }
           } catch (e: any) {
-            log.error(e);
+            log.error(e, seedPage.url());
             throw e;
           } finally {
             clearTimeout(urlTimeoutId);
@@ -256,7 +259,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         })();
         await Promise.race([_crawl, urlTimeout]);
       } catch (e: any) {
-        log.error(e);
+        log.error(e, seedPage.url());
       } finally {
         await seedPage.close();
         await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID])
@@ -331,7 +334,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
   };
   page.on('request', captureThirdPartyRequests);
 
-  await page.goto(url, { timeout: 120000 });
+  await page.goto(url, { timeout: globalThis.PAGE_NAVIGATION_TIMEOUT });
   await sleep(PAGE_SLEEP_TIME);
   log.info(`${url}: Page finished loading`)
   await scrollDownPage(page);

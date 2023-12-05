@@ -52,7 +52,7 @@ interface ScrapePageMetadata {
 export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Promise<number> {
   log.info(`${page.url()}: Scraping page`);
   let [timeout, timeoutId] = createAsyncTimeout<number>(
-    `${page.url()}: Timed out crawling page`, PAGE_CRAWL_TIMEOUT);
+    `${page.url()}: Timed out scraping page`, PAGE_SCRAPE_TIMEOUT);
 
   let db = DbClient.getInstance();
 

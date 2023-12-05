@@ -40,8 +40,13 @@ export function clickAd(
       // Set up a Chrome DevTools session (used later for popup interception)
       const cdp = await BROWSER.target().createCDPSession();
 
+      // Reference to timeouts, so that they can be cleaned up in the next function.
+      let timeout: NodeJS.Timeout, clickTimeout: NodeJS.Timeout;
+
       // Create a function to clean up everything we're about to add
       async function cleanUp() {
+        clearTimeout(timeout);
+        clearTimeout(clickTimeout);
         await cdp.send('Target.setAutoAttach', {
           waitForDebuggerOnStart: false,
           autoAttach: false,
@@ -57,7 +62,7 @@ export function clickAd(
 
       // Create timeout for processing overall clickthrough (including the landing page).
       // If it takes longer than this, abort handling this ad.
-      const timeout = setTimeout(async () => {
+      timeout = setTimeout(async () => {
         if (ctPage && !ctPage.isClosed()) {
           await ctPage?.close();
         }
@@ -67,7 +72,7 @@ export function clickAd(
 
       // Create timeout for the click. If the click fails to do anything,
       // abort handing this ad.
-      const clickTimeout = setTimeout(async () => {
+      clickTimeout = setTimeout(async () => {
         if (ctPage && !ctPage.isClosed()) {
           await ctPage?.close();
         }
@@ -109,7 +114,10 @@ export function clickAd(
               try {
                 ctPage = newPage;
                 log.debug(`${newPage.url()}: Loading and scraping popup page`);
-                await newPage.goto(req.url(), { referer: req.headers().referer });
+                await newPage.goto(req.url(), {
+                  referer: req.headers().referer,
+                  timeout: PAGE_NAVIGATION_TIMEOUT
+                });
                 await sleep(PAGE_SLEEP_TIME);
                 await scrapePage(newPage, {
                   pageType: PageType.LANDING,

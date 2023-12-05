@@ -15,11 +15,11 @@ export enum LogLevel {
   VERBOSE = 5
 }
 
-export function error(e: Error) {
+export function error(e: Error, url?: string) {
   let jsonLog = {
     ts: dayjs().format(),
     level: 'ERROR',
-    message: e.message,
+    message: `${url? url + ': ': url}${e.message}`,
     stack: e.stack
   }
   if (LOG_LEVEL >= LogLevel.ERROR) {

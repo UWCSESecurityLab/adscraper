@@ -167,7 +167,7 @@ export async function scrapeAd(ad: ElementHandle,
   const db = DbClient.getInstance();
 
   let [timeout, timeoutId] = createAsyncTimeout<number>(
-    `${page.url()}: timed out while crawling ad`, AD_CRAWL_TIMEOUT);
+    `${page.url()}: timed out while scraping ad`, AD_SCRAPE_TIMEOUT);
 
   // Declare adId here - we create an empty row in the database before
   // the ad is scraped, so we can use the id for the directory name.
