@@ -76,8 +76,9 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
           urlToPathSafeStr(page.url())
         );
       }
-      if (!fs.existsSync(pagesDir)) {
-        fs.mkdirSync(pagesDir, { recursive: true });
+      let fullPagesDir = path.join(FLAGS.outputDir, pagesDir);
+      if (!fs.existsSync(fullPagesDir)) {
+        fs.mkdirSync(fullPagesDir, { recursive: true });
       }
 
       const scrapedPage = await scrapePageContent(
@@ -153,9 +154,10 @@ async function scrapePageContent(
     return {
       timestamp: new Date(),
       url: page.url(),
-      html: htmlFile,
-      mhtml: mhtmlFile,
-      screenshot: screenshotFile,
+      // Save relative path to the files in the database
+      html: htmlFile.replace(FLAGS.outputDir, ''),
+      mhtml: mhtmlFile.replace(FLAGS.outputDir, ''),
+      screenshot: screenshotFile.replace(FLAGS.outputDir, ''),
     };
   } catch (e) {
     throw e;

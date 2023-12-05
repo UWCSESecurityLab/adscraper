@@ -190,8 +190,9 @@ export async function scrapeAd(ad: ElementHandle,
         await getCrawlOutputDirectory(),
         'scraped_ads/ad_' + adId);
 
-      if (!fs.existsSync(adsDir)) {
-        fs.mkdirSync(adsDir, { recursive: true });
+      const fullAdsDir = path.join(FLAGS.outputDir, adsDir);
+      if (!fs.existsSync(fullAdsDir)) {
+        fs.mkdirSync(fullAdsDir, { recursive: true });
       }
 
       // Scrape ad content
@@ -350,7 +351,8 @@ async function scrapeAdContent(
 
   return {
     timestamp: new Date(),
-    screenshot: screenshotFailed ? undefined : savePath,
+    // Save path to screenshot in database as relative path
+    screenshot: screenshotFailed ? undefined : savePath.replace(FLAGS.outputDir, ''),
     html: html,
     max_bid_price: prebid?.max_bid_price,
     winning_bid: prebid?.winning_bid,
