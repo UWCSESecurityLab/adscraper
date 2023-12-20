@@ -83,7 +83,7 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
 
       const scrapedPage = await scrapePageContent(
         page,
-        pagesDir,
+        fullPagesDir,
         filename);
 
       pageId = await db.archivePage({
