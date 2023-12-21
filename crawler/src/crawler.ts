@@ -95,6 +95,13 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     process.exit(1);
   }
 
+  try {
+    fs.accessSync(flags.outputDir, fs.constants.R_OK | fs.constants.W_OK);
+  } catch (err) {
+    console.error(`${flags.outputDir} is not writable`);
+    process.exit(1);
+  }
+
   const db = await DbClient.initialize(pgConf);
 
   let crawlList: string[] = [];

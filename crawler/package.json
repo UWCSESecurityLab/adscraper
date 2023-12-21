@@ -22,7 +22,7 @@
     "jsonschema": "^1.4.1",
     "pg": "^8.11.0",
     "public-ip": "^6.0.1",
-    "puppeteer": "^21.5.2",
+    "puppeteer": "^21.6.1",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "rss-parser": "^3.13.0",
