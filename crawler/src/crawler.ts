@@ -304,19 +304,19 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
   const captureThirdPartyRequests = async (request: HTTPRequest) => {
     // Exit if request capture is disabled
     if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
-      request.continue(undefined, 2);
+      request.continue(undefined, 0);
       return;
     }
 
     // Exit if request is navigating this tab
     if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-      request.continue(undefined, 2);
+      request.continue(undefined, 0);
       return;
     }
 
     // Exclude same origin requests
     if (new URL(request.url()).origin == new URL(page.url()).origin) {
-      request.continue(undefined, 2);
+      request.continue(undefined, 0);
       return;
     }
 
@@ -327,7 +327,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
       target_url: request.url(),
       resource_type: request.resourceType(),
     });
-    request.continue(undefined, 2);
+    request.continue(undefined, 0);
   };
   page.on('request', captureThirdPartyRequests);
 

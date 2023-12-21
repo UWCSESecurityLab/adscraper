@@ -86,6 +86,7 @@ export function clickAd(
           // Block navigation requests only if they are in in the top level frame
           // (iframes can also trigger this event).
           if (req.isNavigationRequest() && req.frame() === page.mainFrame()) {
+            // log.verbose(`${page.url()} Intercepted navigation request: ${req.url()}`)
             // Stop the navigation from happening.
             await req.abort('aborted', 1);
             clearTimeout(clickTimeout);
@@ -103,7 +104,7 @@ export function clickAd(
             } else if (FLAGS.scrapeOptions.clickAds == 'clickAndScrapeLandingPage') {
               // Open the blocked URL in a new tab, so that we can keep the previous
               // one open.
-              log.verbose(`${page.url()} Blocked attempted navigation to ${req.url}`);
+              log.verbose(`${page.url()} Blocked attempted navigation to ${req.url()}`);
               let newPage = await BROWSER.newPage();
               try {
                 ctPage = newPage;
@@ -125,11 +126,14 @@ export function clickAd(
                 await newPage.close();
                 await cleanUp();
               }
+            } else {
+              log.warning(`${page.url()} Should not reach this point in interceptNavigations()`);
+              await req.continue({}, 0);
             }
           } else {
             try {
               // Allow other unrelated requests through
-              await req.continue(undefined, 1);
+              await req.continue({}, 0);
             } catch (e: any) {
               log.error(e);
             }
