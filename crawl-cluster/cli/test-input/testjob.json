@@ -18,13 +18,13 @@
   "crawls": [
     {
       "crawlName": "profile1",
-      "crawlListFile": "/home/pptruser/input/target_sites_1.txt",
+      "crawlListFile": "/home/pptruser/data/test-input/target_sites_1.txt",
       "crawlListHasReferrerAds": false,
       "profileDir": "/home/pptruser/data/profile1"
     },
     {
       "crawlName": "profile2",
-      "crawlListFile": "/home/pptruser/input/target_sites_2.txt",
+      "crawlListFile": "/home/pptruser/data/test-input/target_sites_2.txt",
       "crawlListHasReferrerAds": false,
       "profileDir": "/home/pptruser/data/profile2"
     }
