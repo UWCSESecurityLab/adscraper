@@ -4,22 +4,57 @@ import amqp from 'amqplib';
 import fs from 'fs';
 import { Validator } from 'jsonschema';
 import path from 'path';
-import pg, { ClientConfig } from 'pg';
+import pg from 'pg';
 import * as url from 'url';
 import JobSpec from './jobSpec.js';
+import commandLineArgs from 'command-line-args';
+import commandLineUsage from 'command-line-usage';
 
-let pgConf: ClientConfig = {
-  host: '127.0.0.1',
-  port: 5432,
-  user: 'adscraper',
-  password: 'insert_password_here',
-  database: 'adscraper'
+const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
+  {
+    name: 'help',
+    alias: 'h',
+    type: Boolean,
+    description: 'Display this usage guide.',
+    group: 'main'
+  },
+  {
+    name: 'job',
+    alias: 'j',
+    type: String,
+    description: 'JSON file containing the crawl job specification. See jobSpec.ts for format.',
+  },
+  {
+    name: 'pg_conf',
+    alias: 'p',
+    type: String,
+    description: 'JSON file containing the Postgres connection parameters: host, port, database, user, password.',
+  },
+  {
+    name: 'amqp_broker',
+    alias: 'a',
+    type: String,
+    description: 'Host and port of the AMQP broker.'
+  }
+];
+
+const options = commandLineArgs(optionsDefinitions)._all;
+const usage = commandLineUsage([
+  {
+    header: 'AdScraper Crawl Worker',
+    content: 'Crawls pages and ads in a Puppeteer instance.'
+  },
+  {
+    header: 'Options',
+    optionList: optionsDefinitions
+  }
+]);
+
+if (options.help) {
+  console.log(usage);
+  process.exit(0);
 }
 
-// Minikube: replace URL (after @) with IP and port provided by
-// minikube service rabbitmq-service --url
-const BROKER_URL = 'amqp://guest:guest@127.0.0.1:55425';
-// const QUEUE = 'job1';
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 export function validateJobSpec(input: any) {
@@ -37,20 +72,23 @@ export function validateJobSpec(input: any) {
 
 async function main() {
   try {
-    let input = JSON.parse(fs.readFileSync(process.argv[2]).toString());
+    const input = JSON.parse(fs.readFileSync(options.job).toString());
     const jobSpec: JobSpec = validateJobSpec(input);
+    console.log('Validated job spec');
 
-    console.log('Read valid job spec');
-    // console.log(jobSpec);
-
-    // Create a job in the database
+    const pgConf = JSON.parse(fs.readFileSync(options.pg_conf).toString());
     const client = new pg.Client(pgConf);
     await client.connect();
+    console.log('Connected to Postgres');
+
+    const brokerUrl = `amqp://guest:guest@${options.amqp_broker}`;
+    const amqpConn = await amqp.connect(brokerUrl);
+    console.log('Connected to AMQP broker');
+
+    // Create a job in the database
     const result = await client.query('INSERT INTO job (name, start_time, completed, job_config) VALUES ($1, $2, $3, $4) RETURNING id', [jobSpec.jobName, new Date(), false, jobSpec]);
     const jobId = result.rows[0].id;
-    // const jobId = 1;
-
-    console.log(`Created job ${jobId} in postgres`);
+    console.log(`Created job ${jobId} in Postgres`);
 
     // Create configs for individual crawls
     let crawlMessages = [];
@@ -80,15 +118,12 @@ async function main() {
 
     // Fill message queue with crawl configs
     const QUEUE = `job${jobId}`;
-    const amqpConn = await amqp.connect(BROKER_URL);
-    console.log('Connected to AMQP broker');
     const amqpChannel = await amqpConn.createChannel();
     await amqpChannel.assertQueue(QUEUE);
     for (let message of crawlMessages) {
       console.log(`Sending message to queue ${QUEUE}`);
       amqpChannel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(message)));
     }
-
     console.log(`${crawlMessages.length} crawl messages sent to queue ${QUEUE}`);
 
     // Programmatically create Kubernetes job

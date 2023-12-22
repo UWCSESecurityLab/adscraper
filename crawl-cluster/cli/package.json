@@ -13,6 +13,8 @@
     "@kubernetes/client-node": "^0.18.1",
     "ads-crawler": "file:../../crawler",
     "amqplib": "^0.10.3",
+    "command-line-args": "^5.2.1",
+    "command-line-usage": "^7.0.1",
     "express": "^4.18.2",
     "job-spec": "file:../../job-spec",
     "jsonschema": "^1.4.1",
@@ -20,6 +22,8 @@
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.1",
+    "@types/command-line-args": "^5.2.3",
+    "@types/command-line-usage": "^5.0.4",
     "@types/express": "^4.17.17",
     "@types/pg": "^8.10.2",
     "typescript-json-schema": "^0.60.0"
