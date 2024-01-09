@@ -11,11 +11,31 @@ export default interface JobSpec {
   // Max number of Chromium instances to run in parallel
   maxWorkers: number;
 
-  // In isolated mode, you provide a single list of URLs, and each URL is
-  // crawled in an isolated browser instance, with a clean profile.
-  // In profile mode, you provide multiple lists of URLs. Each list is crawled
-  // in its own Chromium profile.
-  profileMode: 'isolated' | 'profile';
+  // Specify how browser profiles are handled.
+  profileOptions: {
+    // Sets whether stateful profiles should be constructed.
+    // In isolated mode, you provide a single list of URLs, and each URL is
+    // crawled in an isolated browser instance, with a clean profile.
+    // In profile mode, you provide multiple lists of URLs. Each list is crawled
+    // in its own Chromium profile.
+    profileMode: 'isolated' | 'profile';
+
+    // In "profile" mode, there are several options to specify how profiles
+    // should be read, written, or updated.
+
+    // Specifies whether crawlers should use an existing Chrome profile.
+    // If true, Chrome will be launched with a copy of the userDataDir specified in
+    // |crawls.profileDir| for each crawl.
+    useExistingProfile?: boolean;
+
+    // Specifies what should happen to the profile after the crawl is complete.
+    // If false, the profile is deleted with the container after the crawl is
+    // complete.
+    // If true, the profile is writen to the directory specified in
+    // |crawls.newProfileDir| if provided, or updates the existing profile in
+    // |crawls.profileDir| if not.
+    writeProfileAfterCrawl?: true
+  }
 
   // URLs to crawl in this job.
   // If |profileMode| is "isolated", provide a path to a file containing URLs,
@@ -74,10 +94,17 @@ interface ScrapeOptions {
 interface ProfileCrawlList {
   // User provided name for the profile
   profileId: string;
+
   // Location of the Chrome user-data-dir to use for this crawl.
   // If the directory doesn't exist, creates a new one at this directory,
   // called profile_<profileId>
   profileDir: string;
+
+  // Location the profile should be written to after the crawl,
+  // if you do not want to overwrite the existing profile at
+  // profileDir.
+  newProfileDir: string;
+
   // List of URLs to crawl in this profile.
   crawlListFile: string;
   crawlName: string;

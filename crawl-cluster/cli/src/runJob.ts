@@ -96,20 +96,26 @@ async function main() {
       // Messages to put in the queue, to be consumed by crawler. Implements
       // the CrawlerFlags interface.
       // TODO: generate crawlIds here to simplify retry handling?
-      let message: CrawlerFlags = {
+      let message: CrawlerFlagsWithProfileHandling = {
         "jobId": jobId,
         "crawlName": crawlSpec.crawlName,
         "outputDir": jobSpec.dataDir,
         "crawlListFile": crawlSpec.crawlListFile,
         "crawlListHasReferrerAds": crawlSpec.crawlListHasReferrerAds,
         "chromeOptions": {
-          "profileDir": crawlSpec.profileDir,
+          "profileDir": '/home/pptruser/chrome_profile',
           "headless": 'new',
         },
         // TODO: also allow individual crawls to override crawl/scrape options if
         // we want to include different types of crawls?
         "crawlOptions": jobSpec.crawlOptions,
-        "scrapeOptions": jobSpec.scrapeOptions
+        "scrapeOptions": jobSpec.scrapeOptions,
+        "profileOptions": {
+          "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
+          "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
+          "profileDir": crawlSpec.profileDir,
+          "newProfileDir": crawlSpec.newProfileDir
+        }
       };
 
       crawlMessages.push(message);
@@ -151,3 +157,13 @@ async function main() {
 }
 
 main();
+
+
+interface CrawlerFlagsWithProfileHandling extends CrawlerFlags {
+  profileOptions: {
+    useExistingProfile: boolean;
+    writeProfile: boolean;
+    profileDir?: string;
+    newProfileDir?: string;
+  }
+}
