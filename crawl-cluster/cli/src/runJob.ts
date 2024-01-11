@@ -103,7 +103,7 @@ async function main() {
         "crawlListFile": crawlSpec.crawlListFile,
         "crawlListHasReferrerAds": crawlSpec.crawlListHasReferrerAds,
         "chromeOptions": {
-          "profileDir": '/home/pptruser/chrome_profile',
+          "profileDir": '/home/node/chrome_profile',
           "headless": 'new',
         },
         // TODO: also allow individual crawls to override crawl/scrape options if

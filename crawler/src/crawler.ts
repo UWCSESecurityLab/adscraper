@@ -45,6 +45,7 @@ export interface CrawlerFlags {
     screenshotAdsWithContext: boolean,
     captureThirdPartyRequests: boolean
   }
+  profileOptions?: any
 };
 
 declare global {

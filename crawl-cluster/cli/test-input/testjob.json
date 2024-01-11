@@ -2,7 +2,11 @@
   "jobName": "testJob",
   "dataDir": "/home/pptruser/data",
   "maxWorkers": 2,
-  "profileMode": "profile",
+  "profileOptions": {
+    "profileMode": "profile",
+    "useExistingProfile": true,
+    "writeProfileAfterCrawl": true
+  },
   "crawlOptions": {
     "shuffleCrawlList": false,
     "findAndCrawlPageWithAds": false,
