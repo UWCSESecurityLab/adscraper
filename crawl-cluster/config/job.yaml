@@ -3,26 +3,33 @@ kind: Job
 metadata:
   name: adscraper-job
 spec:
-  # These values will be overriden by the job runner
-  parallelism: 4 # maxWorkers
-  completions: 8 # Number of crawl jobs
+  # These values will be set automatically by runJob.ts
+  # parallelism: 4  # maxWorkers
+  # completions: 8  # Number of crawl jobs
   template:
     metadata:
       name: adscraper-job
     spec:
       containers:
         - name: crawler
-          image: adscraper
-          imagePullPolicy: IfNotPresent
+          image: docker.io/ezeng/adscraper:latest
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 2G
+              cpu: 1
+            # limits:
+              # memory: 4G
+              # cpu: 2
           volumeMounts:
-          - mountPath: /home/pptruser/input
-            name: input-volume
+          - mountPath: /home/pptruser/data
+            name: adscraper-storage
           env:
             - name: BROKER_URL
               value: amqp://guest:guest@rabbitmq-service:5672
-            # Added dynamically by job runner
+            # The queue will be set automatically by runJob.ts
             # - name: QUEUE
-            #   value: job1
+            #   value: job1  # name of job
             - name: PG_DATABASE
               valueFrom:
                 secretKeyRef:
@@ -42,20 +49,20 @@ spec:
               value: postgres.default.svc.cluster.local
             - name: PG_PORT
               value: "5432"
-      restartPolicy: OnFailure
-      volumes:
-        - name: input-volume
-          hostPath:
-            # directory location on host
-            path: /input
-            # this field is optional
-            type: Directory
+            - name: PUPPETEER_CACHE_DIR
+              value: /home/pptruser/.cache/puppeteer
+      nodeSelector:
+        crawler: "true"
       securityContext:
-        fsGroup: 999
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000
         readOnlyRootFileSystem: false
-        runAsUser: 999
-        runAsGroup: 999
         allowPrivilegeEscalation: false
         capabilities:
             add:
             - SYS_ADMIN
+      restartPolicy: OnFailure
+      # Set up your storage mount here
+      # volumes:
+      #   - name: adscraper-storage
