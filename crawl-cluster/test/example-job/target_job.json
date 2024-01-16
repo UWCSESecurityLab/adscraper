@@ -1,0 +1,48 @@
+{
+  "jobName": "targetCrawls",
+  "dataDir": "/home/pptruser/data",
+  "maxWorkers": 4,
+  "profileOptions": {
+    "profileMode": "profile",
+    "useExistingProfile": true,
+    "writeProfileAfterCrawl": false
+  },
+  "crawlOptions": {
+    "shuffleCrawlList": false,
+    "findAndCrawlPageWithAds": false,
+    "findAndCrawlArticlePage": false
+  },
+  "scrapeOptions": {
+    "scrapeSite": false,
+    "scrapeAds": true,
+    "clickAds": "clickAndBlockLoad",
+    "screenshotAdsWithContext": false,
+    "captureThirdPartyRequests": true
+  },
+  "crawls": [
+    {
+      "crawlName": "profile_crawl_sports",
+      "crawlListFile": "/home/pptruser/data/example-job/target_sites.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/sports_profile"
+    },
+    {
+      "crawlName": "profile_crawl_health",
+      "crawlListFile": "/home/pptruser/data/example-job/target_sites.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/health_profile"
+    },
+    {
+      "crawlName": "profile_crawl_cooking",
+      "crawlListFile": "/home/pptruser/data/example-job/target_sites.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/cooking_profile"
+    },
+    {
+      "crawlName": "profile_crawl_tech",
+      "crawlListFile": "/home/pptruser/data/example-job/target_sites.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/tech_profile"
+    }
+  ]
+}
