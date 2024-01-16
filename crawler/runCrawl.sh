@@ -9,9 +9,7 @@ writeProfile=$(echo $jobspec | jq ".profileOptions.writeProfile")
 profileDir=$(echo $jobspec | jq -r ".profileOptions.profileDir")
 newProfileDir=$(echo $jobspec | jq -r ".profileOptions.newProfileDir")
 
-echo $newProfileDir
-
-if [[ $useExistingProfile = false && ! -d "$profileDir" ]]; then
+if [[ $useExistingProfile = true && ! -d "$profileDir" ]]; then
   echo "Error: no directory exists at $profileDir"
   exit 1
 fi
@@ -50,6 +48,7 @@ then
     mv ${profileDir}-temp $profileDir
   else
     echo "Writing profile to ${newProfileDir}"
+    mkdir -p ${newProfileDir}
     # rsync profile to new profile dir
     rsync -a /home/node/chrome_profile/ $newProfileDir
   fi

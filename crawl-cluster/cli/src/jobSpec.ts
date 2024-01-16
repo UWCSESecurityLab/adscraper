@@ -34,7 +34,7 @@ export default interface JobSpec {
     // If true, the profile is writen to the directory specified in
     // |crawls.newProfileDir| if provided, or updates the existing profile in
     // |crawls.profileDir| if not.
-    writeProfileAfterCrawl?: true
+    writeProfileAfterCrawl?: boolean
   }
 
   // URLs to crawl in this job.
