@@ -6,7 +6,7 @@ import { Validator } from 'jsonschema';
 import path from 'path';
 import pg from 'pg';
 import * as url from 'url';
-import JobSpec from './jobSpec.js';
+import JobSpec, { ProfileCrawlList } from './jobSpec.js';
 import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 
@@ -90,36 +90,61 @@ async function main() {
     const jobId = result.rows[0].id;
     console.log(`Created job ${jobId} in Postgres`);
 
-    // Create configs for individual crawls
     let crawlMessages = [];
-    for (let crawlSpec of jobSpec.crawls) {
-      // Messages to put in the queue, to be consumed by crawler. Implements
-      // the CrawlerFlags interface.
-      // TODO: generate crawlIds here to simplify retry handling?
-      let message: CrawlerFlagsWithProfileHandling = {
-        "jobId": jobId,
-        "crawlName": crawlSpec.crawlName,
-        "outputDir": jobSpec.dataDir,
-        "crawlListFile": crawlSpec.crawlListFile,
-        "crawlListHasReferrerAds": crawlSpec.crawlListHasReferrerAds,
-        "chromeOptions": {
-          "profileDir": '/home/node/chrome_profile',
-          "headless": 'new',
-        },
-        // TODO: also allow individual crawls to override crawl/scrape options if
-        // we want to include different types of crawls?
-        "crawlOptions": jobSpec.crawlOptions,
-        "scrapeOptions": jobSpec.scrapeOptions,
-        "profileOptions": {
-          "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
-          "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
-          "profileDir": crawlSpec.profileDir,
-          "newProfileDir": crawlSpec.newProfileDir
-        }
-      };
 
-      crawlMessages.push(message);
+    if (jobSpec.profileOptions.profileMode == 'profile') {
+      // Create configs for individual crawls
+      for (let crawl of jobSpec.crawls) {
+        let crawlSpec = crawl as ProfileCrawlList;
+        // Messages to put in the queue, to be consumed by crawler. Implements
+        // the CrawlerFlags interface.
+        // TODO: generate crawlIds here to simplify retry handling?
+        let message: CrawlerFlagsWithProfileHandling = {
+          "jobId": jobId,
+          "crawlName": crawlSpec.crawlName,
+          "outputDir": jobSpec.dataDir,
+          "crawlListFile": crawlSpec.crawlListFile,
+          "crawlListHasReferrerAds": crawlSpec.crawlListHasReferrerAds,
+          "chromeOptions": {
+            "profileDir": '/home/node/chrome_profile',
+            "headless": 'new',
+          },
+          // TODO: also allow individual crawls to override crawl/scrape options if
+          // we want to include different types of crawls?
+          "crawlOptions": jobSpec.crawlOptions,
+          "scrapeOptions": jobSpec.scrapeOptions,
+          "profileOptions": {
+            "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
+            "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
+            "profileDir": crawlSpec.profileDir,
+            "newProfileDir": crawlSpec.newProfileDir
+          }
+        };
+        crawlMessages.push(message);
+      }
+    } else if (jobSpec.profileOptions.profileMode == 'isolated') {
+      let crawlListFile = jobSpec.crawls as string;
+      let crawlList = fs.readFileSync(crawlListFile).toString().split('\n');
+      for (let url of crawlList) {
+        let message: CrawlerFlagsWithProfileHandling = {
+          "jobId": jobId,
+          "outputDir": jobSpec.dataDir,
+          "url": url,
+          "crawlListHasReferrerAds": false,
+          "chromeOptions": {
+            "headless": 'new',
+          },
+          "crawlOptions": jobSpec.crawlOptions,
+          "scrapeOptions": jobSpec.scrapeOptions,
+          "profileOptions": {
+            "useExistingProfile": false,
+            "writeProfile": false
+          }
+        };
+        crawlMessages.push(message);
+      }
     }
+
     console.log(`Generated ${crawlMessages.length} crawl messages`);
 
     // Fill message queue with crawl configs

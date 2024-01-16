@@ -31,6 +31,11 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
+    name: 'url',
+    type: String,
+    description: 'A single URL to crawl. Use this option instead of --crawl_list to crawl one URL at a time.',
+  },
+  {
     name: 'output_dir',
     type: String,
     description: 'Directory where screenshot, HTML, and MHTML files will be saved.',
@@ -208,21 +213,13 @@ if (options.help) {
   console.log(commandLineUsage(usage));
   process.exit(0);
 }
-// if (!options.crawl_list) {
-//   console.log('Missing required parameter: --crawl_list');
-//   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-//   process.exit(1);
-// }
-if (!options.crawl_list && !options.crawl_list_with_referrer_ads) {
-  console.log('Missing required parameter: --crawl_list OR --crawl_list_with_referrer_ads');
+
+if ((!!options.crawl_list ? 1 : 0) + (!!options.crawl_list_with_referrer_ads ? 1 : 0) + (!!options.url ? 1 : 0) != 1) {
+  console.log('Must specify URLs to crawl using exactly one of --crawl_list, --crawl_list_with_referrer_ads, or --url');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
-if (options.crawl_list && options.crawl_list_with_referrer_ads) {
-  console.log('Cannot provide both --crawl_list and --crawl_list_with_referrer_ads flags');
-  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-  process.exit(1);
-}
+
 if (!options.output_dir) {
   console.log('Missing required parameter: --output_dir');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
@@ -296,6 +293,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       crawlName: options.name,
       jobId: options.job_id,
       outputDir: options.output_dir,
+      url: options.url,
       crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
       crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
       crawlId: options.crawl_id,

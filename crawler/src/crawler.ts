@@ -22,7 +22,8 @@ export interface CrawlerFlags {
   jobId: number,
   crawlId?: number,
   outputDir: string,
-  crawlListFile: string,
+  url?: string,
+  crawlListFile?: string,
   crawlListHasReferrerAds: boolean,
   logLevel?: log.LogLevel,
 
@@ -108,26 +109,35 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   let crawlList: string[] = [];
   let crawlListAdIds: number[] = [];
 
-  if (!fs.existsSync(flags.crawlListFile)) {
-    console.log(`${flags.crawlListFile} does not exist.`);
-    process.exit(1);
-  }
+  if (flags.url) {
+    crawlList = [flags.url];
+  } else if (flags.crawlListFile) {
+    let crawlListFile = flags.crawlListFile;
 
-  if (flags.crawlListHasReferrerAds) {
-    await (new Promise<void>((resolve, reject) => {
-      fs.createReadStream(flags.crawlListFile)
-        .pipe(csvParser())
-        .on('data', data => {
-          crawlList.push(data.url);
-          crawlListAdIds.push(data.ad_id);
-        }).on('end', () => {
-          resolve();
-        });
-    }));
-    console.log(crawlList);
-    console.log(crawlListAdIds);
+    if (!fs.existsSync(crawlListFile)) {
+      console.log(`${crawlListFile} does not exist.`);
+      process.exit(1);
+    }
+
+    if (flags.crawlListHasReferrerAds) {
+      await (new Promise<void>((resolve, reject) => {
+        fs.createReadStream(crawlListFile)
+          .pipe(csvParser())
+          .on('data', data => {
+            crawlList.push(data.url);
+            crawlListAdIds.push(data.ad_id);
+          }).on('end', () => {
+            resolve();
+          });
+      }));
+      console.log(crawlList);
+      console.log(crawlListAdIds);
+    } else {
+      crawlList = fs.readFileSync(crawlListFile).toString().trimEnd().split('\n');
+    }
   } else {
-    crawlList = fs.readFileSync(flags.crawlListFile).toString().trimEnd().split('\n');
+    log.strError('Must provide a crawl list');
+    process.exit(1);
   }
 
   let i = 1;
@@ -169,8 +179,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(FLAGS.crawlListFile)) {
-      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(FLAGS.crawlListFile)}`);
+    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : '')) {
+      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : '')}`);
       process.exit(1);
     }
     if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {

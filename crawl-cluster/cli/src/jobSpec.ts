@@ -43,7 +43,7 @@ export default interface JobSpec {
   // If |profileMode| is 'profiles', provide an array of ProfileCrawlListSpecs,
   // which specifies the Chromium profile name, location, and list of URLs for
   // that profile.
-  crawls: ProfileCrawlList[];
+  crawls: string | ProfileCrawlList[];
   crawlOptions: CrawlOptions;
   scrapeOptions: ScrapeOptions;
 }
@@ -91,7 +91,7 @@ interface ScrapeOptions {
   captureThirdPartyRequests: boolean;
 }
 
-interface ProfileCrawlList {
+export interface ProfileCrawlList {
   // User provided name for the profile
   profileId: string;
 
