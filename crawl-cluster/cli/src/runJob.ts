@@ -148,12 +148,6 @@ async function main() {
 
     console.log(`Generated ${crawlMessages.length} crawl messages`);
 
-    // Fill message queue with crawl configs
-    const QUEUE = `job${jobId}`;
-    const amqpChannel = await amqpConn.createChannel();
-    await amqpChannel.assertQueue(QUEUE);
-    await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
-
     // Programmatically create Kubernetes job
     const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
@@ -169,8 +163,18 @@ async function main() {
     console.log('Read job YAML config');
     console.log('Running job...');
     const res = await batchApi.createNamespacedJob('default', job);
-    console.log('Job sent to k8s successfully');
+    console.log('Job sent to k8');
     console.log(res.body);
+
+    // Fill message queue with crawl configs
+    console.log('Writing crawl messages to AMQP queue');
+    const QUEUE = `job${jobId}`;
+    const amqpChannel = await amqpConn.createChannel();
+    await amqpChannel.assertQueue(QUEUE);
+    await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
+
+    console.log('Done!');
+
     process.exit(0);
   } catch (e) {
     console.log(e);
@@ -180,17 +184,17 @@ async function main() {
 
 
 function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: amqp.Channel, queue: string) {
-  console.log('Writing messages to AMQP queue');
   const pbar = new cliProgress.SingleBar({});
   pbar.start(messages.length, 0);
 
   return new Promise<void>((resolve, reject) => {
     // Write messages to queue, but back off if the amqp queue fills up.
-    function write() {
+    async function write() {
       let ok = true;
       do {
         let message = messages.pop();
         ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)));
+        await sleep(1);
         pbar.increment();
       } while (ok && messages.length > 0);
       if (messages.length > 0) {
@@ -202,6 +206,10 @@ function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: 
     }
     write();
   });
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 main();
