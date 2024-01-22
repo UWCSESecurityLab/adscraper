@@ -8,6 +8,9 @@ spec:
   type: NodePort
   ports:
   - port: 5672
+    name: main
+  - port: 15672
+    name: management
   selector:
     app: taskQueue
     component: rabbitmq

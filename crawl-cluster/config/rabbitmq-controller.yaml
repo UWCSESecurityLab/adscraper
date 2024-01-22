@@ -13,7 +13,7 @@ spec:
         component: rabbitmq
     spec:
       containers:
-      - image: rabbitmq
+      - image: rabbitmq:3-management
         name: rabbitmq
         ports:
         - containerPort: 5672
