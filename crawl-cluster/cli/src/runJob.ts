@@ -9,6 +9,7 @@ import * as url from 'url';
 import JobSpec, { ProfileCrawlList } from './jobSpec.js';
 import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
+import cliProgress from 'cli-progress';
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
@@ -151,11 +152,7 @@ async function main() {
     const QUEUE = `job${jobId}`;
     const amqpChannel = await amqpConn.createChannel();
     await amqpChannel.assertQueue(QUEUE);
-    for (let message of crawlMessages) {
-      console.log(`Sending message to queue ${QUEUE}`);
-      amqpChannel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(message)));
-    }
-    console.log(`${crawlMessages.length} crawl messages sent to queue ${QUEUE}`);
+    await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
 
     // Programmatically create Kubernetes job
     const kc = new k8s.KubeConfig();
@@ -179,6 +176,32 @@ async function main() {
     console.log(e);
     process.exit(1);
   }
+}
+
+
+function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: amqp.Channel, queue: string) {
+  console.log('Writing messages to AMQP queue');
+  const pbar = new cliProgress.SingleBar({});
+  pbar.start(messages.length, 0);
+
+  return new Promise<void>((resolve, reject) => {
+    // Write messages to queue, but back off if the amqp queue fills up.
+    function write() {
+      let ok = true;
+      do {
+        let message = messages.pop();
+        ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)));
+        pbar.increment();
+      } while (ok && messages.length > 0);
+      if (messages.length > 0) {
+        channel.once('drain', write);
+      } else {
+        pbar.stop();
+        resolve();
+      }
+    }
+    write();
+  });
 }
 
 main();
