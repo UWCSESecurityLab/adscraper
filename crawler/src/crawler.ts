@@ -391,7 +391,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
 
   // Save third party requests
   if (FLAGS.scrapeOptions.captureThirdPartyRequests) {
-    log.info(`${url}: Saving same-site and cross-site requests`);
+    log.info(`${url}: Saving ${requests.length} same-site and cross-site requests`);
     const db = DbClient.getInstance();
     for (let request of requests) {
       request.parent_page = pageId;
@@ -399,9 +399,15 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     }
   }
 
-  // Clean up event listeners
-  page.removeAllListeners('request');
-  await page.setRequestInterception(false);
+  // Disabled this code, because sometimes disabling request interception would hang
+  // and cause puppeteer to lose connection to the browser. AFAIK there is no
+  // harm in leaving request interception enabled because the page will be
+  // closed immediately afterward.
+  // // Clean up event listeners
+  // log.verbose(`${url}: Cleaning up request listeners`);
+  // page.removeAllListeners('request');
+  // log.verbose(`${url}: Disabling request interception`);
+  // await page.setRequestInterception(false);
 
   return pageId;
 }
