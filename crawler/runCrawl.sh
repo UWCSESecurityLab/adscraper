@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Read jobSpec from stdin (passed from amqp)
 jobspec=$(cat)
 

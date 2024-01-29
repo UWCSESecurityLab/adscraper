@@ -34,7 +34,6 @@ function validateCrawlSpec(input: any) {
 
 async function main(flags: crawler.CrawlerFlags) {
   try {
-    // console.log(fs.lstatSync('/run/dbus/system_bus_socket'));
     await crawler.crawl(flags, {
       host: process.env.PG_HOST,
       port: parseInt(process.env.PG_PORT!),
