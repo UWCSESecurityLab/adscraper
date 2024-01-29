@@ -126,7 +126,15 @@ async function main() {
     } else if (jobSpec.profileOptions.profileMode == 'isolated') {
       let crawlListFile = jobSpec.crawls as string;
       let crawlList = fs.readFileSync(crawlListFile).toString().split('\n');
+
+      let i = 1;
       for (let url of crawlList) {
+        if (!url || url.length == 0) {
+          console.log(`Warning: empty line at line ${i} of ${crawlListFile}. Skipping.`);
+          i++;
+          continue;
+        }
+
         let message: CrawlerFlagsWithProfileHandling = {
           "jobId": jobId,
           "outputDir": jobSpec.dataDir,
@@ -143,6 +151,7 @@ async function main() {
           }
         };
         crawlMessages.push(message);
+        i++;
       }
     }
 

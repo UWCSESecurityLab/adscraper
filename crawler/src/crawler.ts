@@ -133,7 +133,10 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       console.log(crawlList);
       console.log(crawlListAdIds);
     } else {
-      crawlList = fs.readFileSync(crawlListFile).toString().trimEnd().split('\n');
+      crawlList = fs.readFileSync(crawlListFile).toString()
+        .trimEnd()
+        .split('\n')
+        .filter((url: string) => url.length > 0);
     }
   } else {
     log.strError('Must provide a crawl list');
