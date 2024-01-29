@@ -21,7 +21,7 @@ export function clickAd(
   page: Page,
   adId: number,
   pageId: number,
-  crawlListUrl: string) {
+  originalUrl: string) {
   return new Promise<void>(async (resolve, reject) => {
     // Create references to event listeners, so that we can remove them in the
     // catch block if this part crashes.
@@ -111,6 +111,7 @@ export function clickAd(
               // one open.
               log.verbose(`${page.url()} Blocked attempted navigation to ${req.url()}`);
               let newPage = await BROWSER.newPage();
+              let ctPageId: number | undefined;
               try {
                 ctPage = newPage;
                 log.debug(`${newPage.url()}: Loading and scraping popup page`);
@@ -118,17 +119,33 @@ export function clickAd(
                   referer: req.headers().referer,
                   timeout: PAGE_NAVIGATION_TIMEOUT
                 });
+                ctPageId = await db.archivePage({
+                  timestamp: new Date(),
+                  job_id: FLAGS.jobId,
+                  crawl_id: CRAWL_ID,
+                  url: newPage.url(),
+                  original_url: newPage.url(),
+                  page_type: PageType.LANDING,
+                  referrer_page: pageId,
+                  referrer_page_url: page.url(),
+                  referrer_ad: adId
+                });
                 await sleep(PAGE_SLEEP_TIME);
                 await scrapePage(newPage, {
+                  pageId: ctPageId,
                   pageType: PageType.LANDING,
-                  referrerPage: pageId,
-                  referrerPageUrl: page.url(),
-                  crawlListUrl: crawlListUrl,
                   referrerAd: adId
                 });
                 clearTimeout(timeout);
                 resolve();
               } catch (e) {
+                if (ctPageId) {
+                  if (e instanceof Error) {
+                    await db.updatePage(ctPageId, { error: e.message });
+                  } else {
+                    await db.updatePage(ctPageId, { error: (e as string) });
+                  }
+                }
                 reject(e);
               } finally {
                 await newPage.close();
@@ -245,18 +262,36 @@ export function clickAd(
           log.debug(`${newPage.url()}: Loading and scraping popup page`);
           // injectDOMListener(newPage);
           newPage.on('load', async () => {
+            let db = DbClient.getInstance();
+            let ctPageId;
             try {
+              ctPageId = await db.archivePage({
+                timestamp: new Date(),
+                job_id: FLAGS.jobId,
+                crawl_id: CRAWL_ID,
+                url: newPage.url(),
+                original_url: newPage.url(),
+                page_type: PageType.LANDING,
+                referrer_page: pageId,
+                referrer_page_url: page.url(),
+                referrer_ad: adId
+              });
               await sleep(PAGE_SLEEP_TIME);
               await scrapePage(newPage, {
+                pageId: ctPageId,
                 pageType: PageType.LANDING,
-                referrerPage: pageId,
-                referrerPageUrl: page.url(),
-                crawlListUrl: crawlListUrl,
                 referrerAd: adId
               });
               clearTimeout(timeout);
               resolve();
             } catch (e) {
+              if (ctPageId) {
+                if (e instanceof Error) {
+                  await db.updatePage(ctPageId, { error: e.message });
+                } else {
+                  await db.updatePage(ctPageId, { error: (e as string) });
+                }
+              }
               reject(e);
             } finally {
               if (!newPage.isClosed()) {

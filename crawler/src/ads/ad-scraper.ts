@@ -50,7 +50,7 @@ interface ScrapedAd {
 interface CrawlAdMetadata {
   pageType: PageType,
   parentPageId: number,
-  crawlListUrl: string,
+  originalUrl: string,
   chumboxId?: number,
   platform?: string
 }
@@ -101,7 +101,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
         adId = await scrapeAd(scrapeTarget, page, {
           pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
-          crawlListUrl: metadata.crawlListUrl,
+          originalUrl: metadata.originalUrl,
           chumboxId: chumboxId,
           platform: platform
         });
@@ -131,7 +131,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
             page,
             adId,
             metadata.parentPageId,
-            metadata.crawlListUrl
+            metadata.originalUrl
           );
         }
       } catch (e) {

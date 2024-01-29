@@ -270,7 +270,6 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             }
           } catch (e: any) {
             log.error(e, seedPage.url());
-            throw e;
           } finally {
             clearTimeout(urlTimeoutId);
           }
@@ -319,97 +318,111 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
   //   await domMonitor.injectDOMListener(page);
   // }
 
-  // Set up request interception for capturing third party requests
-  await page.setRequestInterception(true);
-  let requests: WebRequest[] = [];
-  const captureThirdPartyRequests = async (request: HTTPRequest) => {
-    // Exit if request capture is disabled
-    if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
+  // Create an initial entry for the page in the database, to be updated later
+  // with the page contents (or any errors encountered)
+  const db = DbClient.getInstance();
+  const pageId = await db.archivePage({
+    timestamp: new Date(),
+    job_id: FLAGS.jobId,
+    crawl_id: CRAWL_ID,
+    original_url: url,
+    page_type: metadata.pageType,
+    referrer_page: metadata.referrerPageId,
+    referrer_page_url: metadata.referrerPageUrl,
+    referrer_ad: metadata.referrerAd
+  });
+
+  try {
+    // Set up request interception for capturing third party requests
+    await page.setRequestInterception(true);
+    let requests: WebRequest[] = [];
+    const captureThirdPartyRequests = async (request: HTTPRequest) => {
+      // Exit if request capture is disabled
+      if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
+        request.continue(undefined, 0);
+        return;
+      }
+
+      // Exit if request is navigating this tab
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+        request.continue(undefined, 0);
+        return;
+      }
+
+      // Exclude same origin requests
+      if (new URL(request.url()).origin == new URL(page.url()).origin) {
+        request.continue(undefined, 0);
+        return;
+      }
+
+      requests.push({
+        timestamp: new Date(),
+        parent_page: -1, // placeholder
+        initiator: page.url(),
+        target_url: request.url(),
+        resource_type: request.resourceType(),
+      });
       request.continue(undefined, 0);
-      return;
+    };
+    page.on('request', captureThirdPartyRequests);
+
+    await page.goto(url, { timeout: globalThis.PAGE_NAVIGATION_TIMEOUT });
+    await sleep(PAGE_SLEEP_TIME);
+    log.info(`${url}: Page finished loading`)
+    await scrollDownPage(page);
+
+    // Scrape the page
+    if (FLAGS.scrapeOptions.scrapeSite) {
+      await scrapePage(page, {
+        pageId: pageId,
+        pageType: metadata.pageType,
+        referrerAd: metadata.referrerAd
+      });
+    } else {
+      // If not scraping the page, update the contents with the real URL.
+      await db.updatePage(pageId, {
+        timestamp: new Date(),
+        url: page.url(),
+      });
     }
 
-    // Exit if request is navigating this tab
-    if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-      request.continue(undefined, 0);
-      return;
+    // Scrape ads
+    if (FLAGS.scrapeOptions.scrapeAds) {
+      await scrapeAdsOnPage(page, {
+        originalUrl: url,
+        pageType: metadata.pageType,
+        parentPageId: pageId,
+      });
     }
 
-    // Exclude same origin requests
-    if (new URL(request.url()).origin == new URL(page.url()).origin) {
-      request.continue(undefined, 0);
-      return;
+    // Save third party requests
+    if (FLAGS.scrapeOptions.captureThirdPartyRequests) {
+      log.info(`${url}: Saving ${requests.length} same-site and cross-site requests`);
+      const db = DbClient.getInstance();
+      for (let request of requests) {
+        request.parent_page = pageId;
+        await db.archiveRequest(request);
+      }
     }
 
-    requests.push({
-      timestamp: new Date(),
-      parent_page: -1, // placeholder
-      initiator: page.url(),
-      target_url: request.url(),
-      resource_type: request.resourceType(),
-    });
-    request.continue(undefined, 0);
-  };
-  page.on('request', captureThirdPartyRequests);
-
-  await page.goto(url, { timeout: globalThis.PAGE_NAVIGATION_TIMEOUT });
-  await sleep(PAGE_SLEEP_TIME);
-  log.info(`${url}: Page finished loading`)
-  await scrollDownPage(page);
-
-  // Crawl the page
-  let pageId: number;
-  if (FLAGS.scrapeOptions.scrapeSite) {
-    pageId = await scrapePage(page, {
-      crawlListUrl: url,
-      pageType: metadata.pageType,
-      referrerAd: metadata.referrerAd
-    });
-  } else {
-    // If we're not scraping page, still create a database entry (without)
-    // any of the scraped contents
-    const db = DbClient.getInstance();
-    pageId = await db.archivePage({
-      job_id: FLAGS.jobId,
-      crawl_id: CRAWL_ID,
-      timestamp: new Date(),
-      url: page.url(),
-      crawl_list_url: url,
-      page_type: metadata.pageType,
-      referrer_ad: metadata.referrerAd,
-      referrer_page: metadata.referrerPageId,
-      referrer_page_url: metadata.referrerPageUrl
-    });
+    // Disabled this code, because sometimes disabling request interception would hang
+    // and cause puppeteer to lose connection to the browser. AFAIK there is no
+    // harm in leaving request interception enabled because the page will be
+    // closed immediately afterward.
+    // // Clean up event listeners
+    // log.verbose(`${url}: Cleaning up request listeners`);
+    // page.removeAllListeners('request');
+    // log.verbose(`${url}: Disabling request interception`);
+    // await page.setRequestInterception(false);
+    return pageId;
+  } catch (e) {
+    if (e instanceof Error) {
+      await db.updatePage(pageId, { error: e.message });
+    } else {
+      await db.updatePage(pageId, { error: (e as string) });
+    }
+    throw e;
   }
-  if (FLAGS.scrapeOptions.scrapeAds) {
-    await scrapeAdsOnPage(page, {
-      crawlListUrl: url,
-      pageType: metadata.pageType,
-      parentPageId: pageId,
-    });
-  }
-
-  // Save third party requests
-  if (FLAGS.scrapeOptions.captureThirdPartyRequests) {
-    log.info(`${url}: Saving ${requests.length} same-site and cross-site requests`);
-    const db = DbClient.getInstance();
-    for (let request of requests) {
-      request.parent_page = pageId;
-      await db.archiveRequest(request);
-    }
-  }
-
-  // Disabled this code, because sometimes disabling request interception would hang
-  // and cause puppeteer to lose connection to the browser. AFAIK there is no
-  // harm in leaving request interception enabled because the page will be
-  // closed immediately afterward.
-  // // Clean up event listeners
-  // log.verbose(`${url}: Cleaning up request listeners`);
-  // page.removeAllListeners('request');
-  // log.verbose(`${url}: Disabling request interception`);
-  // await page.setRequestInterception(false);
-
-  return pageId;
 }
 
 async function scrollDownPage(page: Page) {

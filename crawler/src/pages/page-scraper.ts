@@ -25,9 +25,6 @@ interface ScrapedPage {
 
 /**
  * @property pageType: Type of page (e.g. home page, article)
- * @property currentDepth: The depth of the crawl at the current page.
- * @property crawlId: The database id of this crawl job.
- * @property crawlListUrl: The original URL in the crawl list that spawned this page.
  * @property referrerPage: If this is a subpage or clickthrough page, the id of the page
  * page that linked to this page.
  * @property referrerPageUrl: URL of the referrerPage.
@@ -35,31 +32,25 @@ interface ScrapedPage {
  * that linked to this page.
  */
 interface ScrapePageMetadata {
-  // crawlId: number,
-  crawlListUrl: string,
+  pageId: number,
   pageType: PageType,
-  referrerPage?: number,
-  referrerPageUrl?: string,
   referrerAd?: number
 }
 
 /**
  * Scrapes a page and saves it in the database.
  * @param page The page to be crawled.
- * @param metadata Crawler metadata linked to this page.
- * @returns The id of the crawled page in the database.
+ * @returns A ScrapedPage object containing the file locations of the scraped
+ * content and other metadata.
  */
-export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Promise<number> {
+export async function scrapePage(page: Page, metadata: ScrapePageMetadata) {
   log.info(`${page.url()}: Scraping page`);
-  let [timeout, timeoutId] = createAsyncTimeout<number>(
+  let [timeout, timeoutId] = createAsyncTimeout<ScrapedPage>(
     `${page.url()}: Timed out scraping page`, PAGE_SCRAPE_TIMEOUT);
-
-  let db = DbClient.getInstance();
 
   const _crawlPage = (async () => {
     try {
-      let pageId = -1;
-
+      // Determine the name of the directory to store page content in.
       let pagesDir;
       let filename = undefined;
       if (metadata.pageType == PageType.LANDING) {
@@ -76,37 +67,29 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata): Prom
           urlToPathSafeStr(page.url())
         );
       }
+
+      // Get the full path
       let fullPagesDir = path.join(FLAGS.outputDir, pagesDir);
       if (!fs.existsSync(fullPagesDir)) {
         fs.mkdirSync(fullPagesDir, { recursive: true });
       }
 
+      // Scrape the page
       const scrapedPage = await scrapePageContent(
         page,
         fullPagesDir,
         filename);
 
-      pageId = await db.archivePage({
-        job_id: FLAGS.jobId,
-        crawl_id: CRAWL_ID,
-        page_type: metadata.pageType,
-        crawl_list_url: metadata.crawlListUrl,
-        referrer_page: metadata.referrerPage,
-        referrer_page_url: metadata.referrerPageUrl,
-        referrer_ad: metadata.referrerAd,
-        ...scrapedPage
-      });
-      log.debug(`${page.url()}: Archived page content`);
+      log.debug(`${page.url()}: Scraped page content`);
       clearTimeout(timeoutId);
-      return pageId;
-
+      const db = DbClient.getInstance();
+      await db.updatePage(metadata.pageId, scrapedPage);
     } catch (e) {
       clearTimeout(timeoutId);
       throw e;
     }
   })();
-  const result = await Promise.race([timeout, _crawlPage]);
-  return result;
+  await Promise.race([timeout, _crawlPage]);
 }
 
 /**

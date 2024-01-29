@@ -47,7 +47,7 @@ CREATE TABLE page (
   -- The original URL on the crawl list that this page originated from
   -- (may differ from url field if there was a redirect, or if this is a subpage
   -- or landing page)
-  crawl_list_url TEXT,
+  original_url TEXT,
 
   ------ Scraped Content ------
   -- Fields in this section are optional, page content is only scraped when
@@ -75,6 +75,9 @@ CREATE TABLE page (
   -- If this is an ad landing page, the id of the ad that opened this page.
   -- Field is added later, after the ad table is defined.
   -- referrer_ad INTEGER references ad(id)
+
+  -- Error message, if a fatal error is encountered while crawling this page
+  error TEXT;
 );
 
 CREATE TABLE chumbox (
