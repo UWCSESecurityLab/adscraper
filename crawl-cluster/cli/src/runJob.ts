@@ -1,15 +1,16 @@
 import k8s from '@kubernetes/client-node';
 import { CrawlerFlags } from 'ads-crawler';
 import amqp from 'amqplib';
+import cliProgress from 'cli-progress';
+import commandLineArgs from 'command-line-args';
+import commandLineUsage from 'command-line-usage';
+import csvParser from 'csv-parser';
 import fs from 'fs';
 import { Validator } from 'jsonschema';
 import path from 'path';
 import pg from 'pg';
 import * as url from 'url';
 import JobSpec, { ProfileCrawlList } from './jobSpec.js';
-import commandLineArgs from 'command-line-args';
-import commandLineUsage from 'command-line-usage';
-import cliProgress from 'cli-progress';
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
@@ -93,9 +94,9 @@ async function main() {
 
     let crawlMessages = [];
 
-    if (jobSpec.profileOptions.profileMode == 'profile') {
+    if (jobSpec.profileCrawlLists && jobSpec.profileCrawlLists.length > 0) {
       // Create configs for individual crawls
-      for (let crawl of jobSpec.crawls) {
+      for (let crawl of jobSpec.profileCrawlLists) {
         let crawlSpec = crawl as ProfileCrawlList;
         // Messages to put in the queue, to be consumed by crawler. Implements
         // the CrawlerFlags interface.
@@ -104,8 +105,7 @@ async function main() {
           "jobId": jobId,
           "crawlName": crawlSpec.crawlName,
           "outputDir": jobSpec.dataDir,
-          "crawlListFile": crawlSpec.crawlListFile,
-          "crawlListHasReferrerAds": crawlSpec.crawlListHasReferrerAds,
+          "urlList": crawlSpec.crawlListFile,
           "chromeOptions": {
             "profileDir": '/home/node/chrome_profile',
             "headless": 'new',
@@ -123,23 +123,24 @@ async function main() {
         };
         crawlMessages.push(message);
       }
-    } else if (jobSpec.profileOptions.profileMode == 'isolated') {
-      let crawlListFile = jobSpec.crawls as string;
-      let crawlList = fs.readFileSync(crawlListFile).toString().split('\n');
+    } else if (jobSpec.crawlList) {
+      if (!fs.existsSync(jobSpec.crawlList)) {
+        console.log(`${jobSpec.crawlList} does not exist.`);
+        process.exit(1);
+      }
+      let crawlList = fs.readFileSync(jobSpec.crawlList).toString().split('\n');
 
       let i = 1;
       for (let url of crawlList) {
         if (!url || url.length == 0) {
-          console.log(`Warning: empty line at line ${i} of ${crawlListFile}. Skipping.`);
+          console.log(`Warning: empty line at line ${i} of ${jobSpec.crawlList}. Skipping.`);
           i++;
           continue;
         }
-
         let message: CrawlerFlagsWithProfileHandling = {
           "jobId": jobId,
           "outputDir": jobSpec.dataDir,
           "url": url,
-          "crawlListHasReferrerAds": false,
           "chromeOptions": {
             "headless": 'new',
           },
@@ -153,6 +154,45 @@ async function main() {
         crawlMessages.push(message);
         i++;
       }
+    } else if (jobSpec.adUrlCrawlList) {
+      let urls: string[] = [];
+      let adIds: number[] = [];
+      let adUrlCrawlList = jobSpec.adUrlCrawlList;
+      if (!fs.existsSync(adUrlCrawlList)) {
+        console.log(`${adUrlCrawlList} does not exist.`);
+        process.exit(1);
+      }
+      await (new Promise<void>((resolve, reject) => {
+        fs.createReadStream(adUrlCrawlList)
+          .pipe(csvParser())
+          .on('data', data => {
+            urls.push(data.url);
+            adIds.push(data.ad_id);
+          }).on('end', () => {
+            resolve();
+          });
+      }));
+      for (let i = 0; i < urls.length; i++) {
+        let message: CrawlerFlagsWithProfileHandling = {
+          "jobId": jobId,
+          "outputDir": jobSpec.dataDir,
+          "url": urls[i],
+          "adId": adIds[i],
+          "chromeOptions": {
+            "headless": 'new',
+          },
+          "crawlOptions": jobSpec.crawlOptions,
+          "scrapeOptions": jobSpec.scrapeOptions,
+          "profileOptions": {
+            "useExistingProfile": false,
+            "writeProfile": false
+          },
+        };
+        crawlMessages.push(message);
+      }
+    } else {
+      console.log('No crawl list provided. Must specify list in either profileCrawlLists, crawlList, or adUrlCrawlList.');
+      process.exit(1);
     }
 
     console.log(`Generated ${crawlMessages.length} crawl messages`);
@@ -191,13 +231,13 @@ async function main() {
   }
 }
 
-
+// Writes a list of crawl messages to the AMQP queue.
 function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: amqp.Channel, queue: string) {
   const pbar = new cliProgress.SingleBar({});
   pbar.start(messages.length, 0);
 
   return new Promise<void>((resolve, reject) => {
-    // Write messages to queue, but back off if the amqp queue fills up.
+    // Send a message every 1ms; back off if the queue fills up.
     async function write() {
       let ok = true;
       do {
@@ -223,7 +263,8 @@ function sleep(ms: number) {
 
 main();
 
-
+// Additional fields passed to runCrawl.sh, to specify if the profile should
+// be copied into the container and/or saved after the crawl.
 interface CrawlerFlagsWithProfileHandling extends CrawlerFlags {
   profileOptions: {
     useExistingProfile: boolean;

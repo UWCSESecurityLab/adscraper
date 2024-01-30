@@ -11,41 +11,39 @@ export default interface JobSpec {
   // Max number of Chromium instances to run in parallel
   maxWorkers: number;
 
-  // Specify how browser profiles are handled.
-  profileOptions: {
-    // Sets whether stateful profiles should be constructed.
-    // In isolated mode, you provide a single list of URLs, and each URL is
-    // crawled in an isolated browser instance, with a clean profile.
-    // In profile mode, you provide multiple lists of URLs. Each list is crawled
-    // in its own Chromium profile.
-    profileMode: 'isolated' | 'profile';
-
-    // In "profile" mode, there are several options to specify how profiles
-    // should be read, written, or updated.
-
-    // Specifies whether crawlers should use an existing Chrome profile.
-    // If true, Chrome will be launched with a copy of the userDataDir specified in
-    // |crawls.profileDir| for each crawl.
-    useExistingProfile?: boolean;
-
-    // Specifies what should happen to the profile after the crawl is complete.
-    // If false, the profile is deleted with the container after the crawl is
-    // complete.
-    // If true, the profile is writen to the directory specified in
-    // |crawls.newProfileDir| if provided, or updates the existing profile in
-    // |crawls.profileDir| if not.
-    writeProfileAfterCrawl?: boolean
-  }
-
   // URLs to crawl in this job.
-  // If |profileMode| is "isolated", provide a path to a file containing URLs,
+  // If profileOptions.profileMode is "isolated", provide a path to a file containing URLs,
   // one line per URL.
-  // If |profileMode| is 'profiles', provide an array of ProfileCrawlListSpecs,
+  crawlList?: string,
+  // Or, if crawling ad urls, set profileOptions.profileMode to "isolated", and provide a CSV
+  // with columns "ad_id" and "url"
+  adUrlCrawlList?: string,
+  // If profileOptions.profileMode is 'profiles', provide an array of ProfileCrawlListSpecs,
   // which specifies the Chromium profile name, location, and list of URLs for
   // that profile.
-  crawls: string | ProfileCrawlList[];
+  profileCrawlLists? : ProfileCrawlList[];
+
+  profileOptions: ProfileOptions;
   crawlOptions: CrawlOptions;
   scrapeOptions: ScrapeOptions;
+}
+
+interface ProfileOptions {
+  // In "profile" mode, there are several options to specify how profiles
+  // should be read, written, or updated.
+
+  // Specifies whether crawlers should use an existing Chrome profile.
+  // If true, Chrome will be launched with a copy of the userDataDir specified in
+  // |crawls.profileDir| for each crawl.
+  useExistingProfile?: boolean;
+
+  // Specifies what should happen to the profile after the crawl is complete.
+  // If false, the profile is deleted with the container after the crawl is
+  // complete.
+  // If true, the profile is writen to the directory specified in
+  // |crawls.newProfileDir| if provided, or updates the existing profile in
+  // |crawls.profileDir| if not.
+  writeProfileAfterCrawl?: boolean
 }
 
 interface CrawlOptions   {
@@ -78,8 +76,8 @@ interface ScrapeOptions {
   // the landing page. This may affect the browsing profile.
   clickAds: 'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage';
 
-  // TODO: capture third party network requests for tracking detection
-  // captureRequests: boolean;
+  // Capture third party network requests for tracking detection
+  captureThirdPartyRequests: boolean;
 
   // Capture third party URLs associated with ads in the DOM
   // (e.g. src attributes in the ad and its iframe, scripts that modify the ad)
@@ -87,8 +85,6 @@ interface ScrapeOptions {
 
   // When scraping a screenshot of ads
   screenshotAdsWithContext: boolean;
-
-  captureThirdPartyRequests: boolean;
 }
 
 export interface ProfileCrawlList {
@@ -107,6 +103,7 @@ export interface ProfileCrawlList {
 
   // List of URLs to crawl in this profile.
   crawlListFile: string;
+
+  // Name/label for the crawl.
   crawlName: string;
-  crawlListHasReferrerAds: boolean;
 }

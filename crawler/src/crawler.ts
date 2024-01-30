@@ -23,8 +23,9 @@ export interface CrawlerFlags {
   crawlId?: number,
   outputDir: string,
   url?: string,
-  crawlListFile?: string,
-  crawlListHasReferrerAds: boolean,
+  adId?: number,
+  urlList?: string,
+  adUrlList?: string,
   logLevel?: log.LogLevel,
 
   chromeOptions: {
@@ -96,7 +97,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     console.log(`${flags.outputDir} is not a valid directory`);
     process.exit(1);
   }
-
+  // Check if output directory is writeable. If not, check the file permissions
+  // (or mount settings, if running in a container).
   try {
     fs.accessSync(flags.outputDir, fs.constants.R_OK | fs.constants.W_OK);
   } catch (err) {
@@ -106,49 +108,57 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
 
   const db = await DbClient.initialize(pgConf);
 
+  // Read crawl list from args
+  let crawlListFile: string = '';
   let crawlList: string[] = [];
   let crawlListAdIds: number[] = [];
+  let isAdUrlCrawl = false;
 
   if (flags.url) {
     crawlList = [flags.url];
-  } else if (flags.crawlListFile) {
-    let crawlListFile = flags.crawlListFile;
-
+    if (flags.adId) {
+      crawlListAdIds = [flags.adId];
+      isAdUrlCrawl = true;
+    }
+  } else if (flags.urlList) {
+    if (!fs.existsSync(flags.urlList)) {
+      console.log(`${flags.urlList} does not exist.`);
+      process.exit(1);
+    }
+    crawlList = fs.readFileSync(flags.urlList).toString()
+      .trimEnd()
+      .split('\n')
+      .filter((url: string) => url.length > 0);
+    crawlListFile = flags.urlList;
+  } else if (flags.adUrlList) {
+    crawlListFile = flags.adUrlList;
     if (!fs.existsSync(crawlListFile)) {
       console.log(`${crawlListFile} does not exist.`);
       process.exit(1);
     }
-
-    if (flags.crawlListHasReferrerAds) {
-      await (new Promise<void>((resolve, reject) => {
-        fs.createReadStream(crawlListFile)
-          .pipe(csvParser())
-          .on('data', data => {
-            crawlList.push(data.url);
-            crawlListAdIds.push(data.ad_id);
-          }).on('end', () => {
-            resolve();
-          });
-      }));
-      console.log(crawlList);
-      console.log(crawlListAdIds);
-    } else {
-      crawlList = fs.readFileSync(crawlListFile).toString()
-        .trimEnd()
-        .split('\n')
-        .filter((url: string) => url.length > 0);
-    }
+    await (new Promise<void>((resolve, reject) => {
+      fs.createReadStream(crawlListFile)
+        .pipe(csvParser())
+        .on('data', data => {
+          crawlList.push(data.url);
+          crawlListAdIds.push(data.ad_id);
+        }).on('end', () => {
+          resolve();
+        });
+    }));
+    isAdUrlCrawl = true;
   } else {
-    log.strError('Must provide a crawl list');
+    log.strError('Must provide one of the following crawl inputs: url, urlList, or adUrlList');
     process.exit(1);
   }
 
+  // Validate crawl list urls
   let i = 1;
   for (let url of crawlList) {
     try {
       new URL(url);
     } catch (e) {
-      log.strError(`Invalid URL in ${flags.crawlListFile}, line ${i}: ${url}`);
+      log.strError(`Invalid URL in crawl list ${crawlListFile} at line ${i}: ${url}`);
       process.exit(1);
     }
   }
@@ -168,7 +178,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         name: FLAGS.crawlName,
         start_time: new Date(),
         completed: false,
-        crawl_list: FLAGS.crawlListFile, // path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : `Crawl ${FLAGS.crawlPrevAdLandingPages} landing pages` ),
+        crawl_list: crawlListFile,
         crawl_list_current_index: 0,
         crawl_list_length: crawlList.length,
         profile_dir: FLAGS.chromeOptions.profileDir,
@@ -178,12 +188,13 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     }) as number;
   } else {
     const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE id=$1', [FLAGS.crawlId]);
+    // Check if crawl inputs match the stored inputs of the previous crawl
     if (prevCrawl.rowCount !== 1) {
       console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
       process.exit(1);
     }
-    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : '')) {
-      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(FLAGS.crawlListFile ? FLAGS.crawlListFile : '')}`);
+    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
+      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
       process.exit(1);
     }
     if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
@@ -221,7 +232,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     // Main loop through crawl list
     for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
       const url = crawlList[i];
-      let prevAdId = FLAGS.crawlListHasReferrerAds ? crawlListAdIds[i] : -1;
+
+      let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
       // Set overall timeout for this crawl list item
       let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
@@ -235,7 +247,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
           try {
             // Open the URL and scrape it (if specified)
             let pageId;
-            if (FLAGS.crawlListHasReferrerAds) {
+            if (isAdUrlCrawl) {
               pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.LANDING, referrerAd: prevAdId });
             } else {
               pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.MAIN });

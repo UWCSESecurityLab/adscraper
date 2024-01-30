@@ -19,23 +19,6 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'crawl_list',
-    type: String,
-    description: 'A text file containing URLs to crawl, one URL per line',
-    group: 'main'
-  },
-  {
-    name: 'crawl_list_with_referrer_ads',
-    type: String,
-    description: 'A CSV with the columns (url, ad_id) containing URLs to crawl, and the ad_id of the referrer ad. Use this option instead of --crawl_list if scraping ad landing pages separately from ads, to avoid profile pollution.',
-    group: 'main'
-  },
-  {
-    name: 'url',
-    type: String,
-    description: 'A single URL to crawl. Use this option instead of --crawl_list to crawl one URL at a time.',
-  },
-  {
     name: 'output_dir',
     type: String,
     description: 'Directory where screenshot, HTML, and MHTML files will be saved.',
@@ -66,6 +49,30 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     description: 'Sets the level of logging verbosity. Choose one of the following: error > warning > info > debug > verbose. Defaults to "info"',
     defaultValue: 'info',
     group: 'main'
+  },
+  {
+    name: 'crawl_list',
+    type: String,
+    description: 'A text file containing URLs to crawl, one URL per line',
+    group: 'input'
+  },
+  {
+    name: 'ad_url_crawl_list',
+    type: String,
+    description: 'A CSV with the columns (url, ad_id) containing URLs to crawl, and the ad_id of the referrer ad. Use this option instead of --crawl_list if scraping ad landing pages separately from ads, to avoid profile pollution.',
+    group: 'input'
+  },
+  {
+    name: 'url',
+    type: String,
+    description: 'A single URL to crawl. Use this option instead of --crawl_list to crawl one URL at a time.',
+    group: 'input'
+  },
+  {
+    name: 'ad_id',
+    type: String,
+    description: 'If scraping a single URL with --url that is an ad landing page, use this flag to specify the ad in the database that the landing page is associated with.',
+    group: 'input',
   },
   {
     name: 'pg_conf_file',
@@ -189,6 +196,11 @@ const usage = [
     optionList: optionsDefinitions
   },
   {
+    header: 'Input Options (Choose one)',
+    group: 'input',
+    optionList: optionsDefinitions,
+  },
+  {
     header: 'Database Configuration',
     optionList: optionsDefinitions,
     group: 'pg'
@@ -214,8 +226,8 @@ if (options.help) {
   process.exit(0);
 }
 
-if ((!!options.crawl_list ? 1 : 0) + (!!options.crawl_list_with_referrer_ads ? 1 : 0) + (!!options.url ? 1 : 0) != 1) {
-  console.log('Must specify URLs to crawl using exactly one of --crawl_list, --crawl_list_with_referrer_ads, or --url');
+if ((!!options.crawl_list ? 1 : 0) + (!!options.ad_url_crawl_list ? 1 : 0) + (!!options.url ? 1 : 0) != 1) {
+  console.log('Must specify input using exactly one of --crawl_list, --ad_url_crawl_list, or --url');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
@@ -294,8 +306,9 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       jobId: options.job_id,
       outputDir: options.output_dir,
       url: options.url,
-      crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
-      crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
+      adId: options.ad_id,
+      urlList: options.crawl_list,
+      adUrlList: options.ad_url_crawl_list,
       crawlId: options.crawl_id,
       logLevel: logLevel,
 
