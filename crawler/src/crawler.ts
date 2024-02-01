@@ -293,14 +293,14 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       } catch (e: any) {
         log.error(e, seedPage.url());
       } finally {
-        await seedPage.close();
-        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID])
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
+        seedPage.close();
       }
     }
-    await BROWSER.close();
     await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
+    // await BROWSER.close();
   } catch (e) {
-    await BROWSER.close();
+    // await BROWSER.close();
     throw e;
   }
 }
@@ -446,7 +446,6 @@ async function scrollDownPage(page: Page) {
   let scrollY = await page.evaluate(() => window.scrollY);
   let scrollHeight = await page.evaluate(() => document.body.scrollHeight);
   let i = 0;
-
   // Scroll until at the bottom of the page or 30 iterations pass
   while (scrollY + innerHeight < scrollHeight && i < 30) {
     // set a screen position to scroll from
