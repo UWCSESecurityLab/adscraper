@@ -1,5 +1,5 @@
 import k8s from '@kubernetes/client-node';
-import { CrawlerFlags } from 'ads-crawler';
+import { CrawlerFlags, crawl } from 'ads-crawler';
 import amqp from 'amqplib';
 import cliProgress from 'cli-progress';
 import commandLineArgs from 'command-line-args';
@@ -10,7 +10,7 @@ import { Validator } from 'jsonschema';
 import path from 'path';
 import pg from 'pg';
 import * as url from 'url';
-import JobSpec, { ProfileCrawlList } from './jobSpec.js';
+import JobSpec, { JobSpecWithAdUrlCrawlList, JobSpecWithCrawlList, JobSpecWithProfileCrawlLists, ProfileCrawlList } from './jobSpec.js';
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
@@ -25,6 +25,11 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     alias: 'j',
     type: String,
     description: 'JSON file containing the crawl job specification. See jobSpec.ts for format.',
+  },
+  {
+    name: 'resume',
+    type: Boolean,
+    description: 'Include this flag to resume an existing job. The job name in the job specification must match the name of an existing job in the database. The job runner will automatically configure the job to complete the remaining crawls in the previously stopped job\'s message queue.'
   },
   {
     name: 'pg_conf',
@@ -74,161 +79,224 @@ export function validateJobSpec(input: any) {
 
 async function main() {
   try {
+    // Validate input
     const input = JSON.parse(fs.readFileSync(options.job).toString());
     const jobSpec: JobSpec = validateJobSpec(input);
     console.log('Validated job spec');
 
+    // Connect to postgres database
     const pgConf = JSON.parse(fs.readFileSync(options.pg_conf).toString());
     const client = new pg.Client(pgConf);
     await client.connect();
     console.log('Connected to Postgres');
 
+    // Connect to AMQP message queue
     const brokerUrl = `amqp://guest:guest@${options.amqp_broker}`;
     const amqpConn = await amqp.connect(brokerUrl);
+    const amqpChannel = await amqpConn.createChannel();
     console.log('Connected to AMQP broker');
 
-    // Create a job in the database
-    const result = await client.query('INSERT INTO job (name, start_time, completed, job_config) VALUES ($1, $2, $3, $4) RETURNING id', [jobSpec.jobName, new Date(), false, jobSpec]);
-    const jobId = result.rows[0].id;
-    console.log(`Created job ${jobId} in Postgres`);
-
-    let crawlMessages = [];
-
-    if (jobSpec.profileCrawlLists && jobSpec.profileCrawlLists.length > 0) {
-      // Create configs for individual crawls
-      for (let crawl of jobSpec.profileCrawlLists) {
-        let crawlSpec = crawl as ProfileCrawlList;
-        // Messages to put in the queue, to be consumed by crawler. Implements
-        // the CrawlerFlags interface.
-        // TODO: generate crawlIds here to simplify retry handling?
-        let message: CrawlerFlagsWithProfileHandling = {
-          "jobId": jobId,
-          "crawlName": crawlSpec.crawlName,
-          "outputDir": jobSpec.dataDir,
-          "urlList": crawlSpec.crawlListFile,
-          "chromeOptions": {
-            "profileDir": '/home/node/chrome_profile',
-            "headless": 'new',
-          },
-          // TODO: also allow individual crawls to override crawl/scrape options if
-          // we want to include different types of crawls?
-          "crawlOptions": jobSpec.crawlOptions,
-          "scrapeOptions": jobSpec.scrapeOptions,
-          "profileOptions": {
-            "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
-            "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
-            "profileDir": crawlSpec.profileDir,
-            "newProfileDir": crawlSpec.newProfileDir
-          }
-        };
-        crawlMessages.push(message);
-      }
-    } else if (jobSpec.crawlList) {
-      if (!fs.existsSync(jobSpec.crawlList)) {
-        console.log(`${jobSpec.crawlList} does not exist.`);
-        process.exit(1);
-      }
-      let crawlList = fs.readFileSync(jobSpec.crawlList).toString().split('\n');
-
-      let i = 1;
-      for (let url of crawlList) {
-        if (!url || url.length == 0) {
-          console.log(`Warning: empty line at line ${i} of ${jobSpec.crawlList}. Skipping.`);
-          i++;
-          continue;
-        }
-        let message: CrawlerFlagsWithProfileHandling = {
-          "jobId": jobId,
-          "outputDir": jobSpec.dataDir,
-          "url": url,
-          "chromeOptions": {
-            "headless": 'new',
-          },
-          "crawlOptions": jobSpec.crawlOptions,
-          "scrapeOptions": jobSpec.scrapeOptions,
-          "profileOptions": {
-            "useExistingProfile": false,
-            "writeProfile": false
-          }
-        };
-        crawlMessages.push(message);
-        i++;
-      }
-    } else if (jobSpec.adUrlCrawlList) {
-      let urls: string[] = [];
-      let adIds: number[] = [];
-      let adUrlCrawlList = jobSpec.adUrlCrawlList;
-      if (!fs.existsSync(adUrlCrawlList)) {
-        console.log(`${adUrlCrawlList} does not exist.`);
-        process.exit(1);
-      }
-      await (new Promise<void>((resolve, reject) => {
-        fs.createReadStream(adUrlCrawlList)
-          .pipe(csvParser())
-          .on('data', data => {
-            urls.push(data.url);
-            adIds.push(data.ad_id);
-          }).on('end', () => {
-            resolve();
-          });
-      }));
-      for (let i = 0; i < urls.length; i++) {
-        let message: CrawlerFlagsWithProfileHandling = {
-          "jobId": jobId,
-          "outputDir": jobSpec.dataDir,
-          "url": urls[i],
-          "adId": adIds[i],
-          "chromeOptions": {
-            "headless": 'new',
-          },
-          "crawlOptions": jobSpec.crawlOptions,
-          "scrapeOptions": jobSpec.scrapeOptions,
-          "profileOptions": {
-            "useExistingProfile": false,
-            "writeProfile": false
-          },
-        };
-        crawlMessages.push(message);
-      }
-    } else {
-      console.log('No crawl list provided. Must specify list in either profileCrawlLists, crawlList, or adUrlCrawlList.');
-      process.exit(1);
-    }
-
-    console.log(`Generated ${crawlMessages.length} crawl messages`);
-
-    // Programmatically create Kubernetes job
+    // Connect to k8s cluster
     const kc = new k8s.KubeConfig();
     kc.loadFromDefault();
     const batchApi = kc.makeApiClient(k8s.BatchV1Api);
+    console.log('Connected to K8s API');
 
-    let job = k8s.loadYaml(fs.readFileSync('../config/job.yaml').toString()) as k8s.V1Job;
-    job.spec!.parallelism = jobSpec.maxWorkers;
-    job.spec!.completions = crawlMessages.length;
-    job.metadata!.name = `adscraper-job-${jobSpec.jobName.toLowerCase()}`;
-    job.spec!.template.metadata!.name = `adscraper-job-${jobSpec.jobName.toLowerCase()}`;
-    job.spec!.template!.spec!.containers![0].env!.push({name: 'QUEUE', value: `job${jobId}`});
+    if (!options.resume) {
+      // Create a job in the database
+      const result = await client.query('INSERT INTO job (name, start_time, completed, job_config) VALUES ($1, $2, $3, $4) RETURNING id', [jobSpec.jobName, new Date(), false, jobSpec]);
+      const jobId = result.rows[0].id;
+      const QUEUE = `job${jobId}`;
+      console.log(`Created job ${jobId} in Postgres`);
 
-    console.log('Read job YAML config');
-    console.log('Running job...');
-    const res = await batchApi.createNamespacedJob('default', job);
-    console.log('Job sent to k8');
-    console.log(res.body);
+      // Generate crawl messages and job YAML
+      let crawlMessages = await generateCrawlMessages(jobId, jobSpec);
+      let job = await generateK8sJob({
+        parallelism: jobSpec.maxWorkers,
+        completions: crawlMessages.length,
+        jobId: jobId,
+        jobName: jobSpec.jobName
+      });
 
-    // Fill message queue with crawl configs
-    console.log('Writing crawl messages to AMQP queue');
-    const QUEUE = `job${jobId}`;
-    const amqpChannel = await amqpConn.createChannel();
-    await amqpChannel.assertQueue(QUEUE);
-    await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
+      // Submit the job to cluster
+      console.log('Submitting k8s job');
+      const res = await batchApi.createNamespacedJob('default', job);
+      console.log(res.body);
 
+      // Fill message queue with crawl configs
+      console.log(`Writing crawl messages to queue ${QUEUE}`);
+      await amqpChannel.assertQueue(QUEUE);
+      await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
+    } else {
+      // Find previous job in the database
+      let dbJob = await client.query('SELECT * FROM job WHERE name=$1', [jobSpec.jobName]);
+      if (dbJob.rows.length == 0) {
+        console.log(`Error: cannot resume, could not find existing job with name ${jobSpec.jobName}`);
+        process.exit(1);
+      }
+      const jobId = dbJob.rows[0].id;
+      const QUEUE = `job${jobId}`;
+
+      // Check if the message queue for this job exists and has unprocessed messages
+      let assertQueueRes = await amqpChannel.assertQueue(QUEUE);
+      if (assertQueueRes.messageCount == 0) {
+        console.log(`Error: cannot resume, no remaining messages in queue "${QUEUE}".`);
+        process.exit(1);
+      }
+
+      // Generate job YAML
+      let job = await generateK8sJob({
+        parallelism: jobSpec.maxWorkers,
+        completions: assertQueueRes.messageCount,
+        jobId: jobId,
+        jobName: jobSpec.jobName
+      });
+
+      // Submit the job to cluster
+      console.log('Starting k8s job');
+      const res = await batchApi.createNamespacedJob('default', job);
+      console.log(res.body);
+    }
     console.log('Done!');
-
     process.exit(0);
   } catch (e) {
     console.log(e);
     process.exit(1);
   }
+}
+
+async function generateK8sJob(options: {parallelism: number, completions: number, jobId: number, jobName: string}) {
+  let job = k8s.loadYaml(fs.readFileSync('../config/job.yaml').toString()) as k8s.V1Job;
+  job.spec!.parallelism = options.parallelism;
+  job.spec!.completions = options.completions;
+  job.metadata!.name = `${options.jobName.toLowerCase()}`;
+  job.spec!.template.metadata!.name = `${options.jobName.toLowerCase()}`;
+  job.spec!.template!.spec!.containers![0].env!.push({name: 'QUEUE', value: `job${options.jobId}`});
+  return job;
+}
+
+async function generateCrawlMessages(jobId: number, jobSpec: JobSpec): Promise<CrawlerFlagsWithProfileHandling[]> {
+  let crawlMessages = [];
+  if (jobSpec.profileCrawlLists && jobSpec.profileCrawlLists.length > 0) {
+    // Create configs for individual crawls
+    crawlMessages = generateProfileCrawlMessages(jobId, jobSpec as JobSpecWithProfileCrawlLists);
+  } else if (jobSpec.crawlList) {
+    crawlMessages = generateIsolatedCrawlMessages(jobId, jobSpec as JobSpecWithCrawlList);
+  } else if (jobSpec.adUrlCrawlList) {
+    crawlMessages = await generateAdCrawlMessages(jobId, jobSpec as JobSpecWithAdUrlCrawlList);
+  } else {
+    console.log('No crawl list provided. Must specify list in either profileCrawlLists, crawlList, or adUrlCrawlList.');
+    process.exit(1);
+  }
+  console.log(`Generated ${crawlMessages.length} crawl messages`);
+  return crawlMessages;
+}
+
+function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfileCrawlLists) {
+  let crawlMessages = [];
+  for (let crawl of jobSpec.profileCrawlLists) {
+    let crawlSpec = crawl as ProfileCrawlList;
+    // Messages to put in the queue, to be consumed by crawler. Implements
+    // the CrawlerFlags interface.
+    // TODO: generate crawlIds here to simplify retry handling?
+    let message: CrawlerFlagsWithProfileHandling = {
+      "jobId": jobId,
+      "crawlName": crawlSpec.crawlName,
+      "outputDir": jobSpec.dataDir,
+      "urlList": crawlSpec.crawlListFile,
+      "chromeOptions": {
+        "profileDir": '/home/node/chrome_profile',
+        "headless": 'new',
+      },
+      // TODO: also allow individual crawls to override crawl/scrape options if
+      // we want to include different types of crawls?
+      "crawlOptions": jobSpec.crawlOptions,
+      "scrapeOptions": jobSpec.scrapeOptions,
+      "profileOptions": {
+        "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
+        "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
+        "profileDir": crawlSpec.profileDir,
+        "newProfileDir": crawlSpec.newProfileDir
+      }
+    };
+    crawlMessages.push(message);
+  }
+  return crawlMessages;
+}
+
+function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlList) {
+  let crawlMessages = [];
+  if (!fs.existsSync(jobSpec.crawlList)) {
+    console.log(`${jobSpec.crawlList} does not exist.`);
+    process.exit(1);
+  }
+  let crawlList = fs.readFileSync(jobSpec.crawlList).toString().split('\n');
+
+  let i = 1;
+  for (let url of crawlList) {
+    if (!url || url.length == 0) {
+      console.log(`Warning: empty line at line ${i} of ${jobSpec.crawlList}. Skipping.`);
+      i++;
+      continue;
+    }
+    let message: CrawlerFlagsWithProfileHandling = {
+      "jobId": jobId,
+      "outputDir": jobSpec.dataDir,
+      "url": url,
+      "chromeOptions": {
+        "headless": 'new',
+      },
+      "crawlOptions": jobSpec.crawlOptions,
+      "scrapeOptions": jobSpec.scrapeOptions,
+      "profileOptions": {
+        "useExistingProfile": false,
+        "writeProfile": false
+      }
+    };
+    crawlMessages.push(message);
+    i++;
+  }
+  return crawlMessages;
+}
+
+async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlCrawlList) {
+  let crawlMessages = [];
+  let urls: string[] = [];
+  let adIds: number[] = [];
+  let adUrlCrawlList = jobSpec.adUrlCrawlList;
+  if (!fs.existsSync(adUrlCrawlList)) {
+    console.log(`${adUrlCrawlList} does not exist.`);
+    process.exit(1);
+  }
+  await (new Promise<void>((resolve, reject) => {
+    fs.createReadStream(adUrlCrawlList)
+      .pipe(csvParser())
+      .on('data', data => {
+        urls.push(data.url);
+        adIds.push(data.ad_id);
+      }).on('end', () => {
+        resolve();
+      });
+  }));
+  for (let i = 0; i < urls.length; i++) {
+    let message: CrawlerFlagsWithProfileHandling = {
+      "jobId": jobId,
+      "outputDir": jobSpec.dataDir,
+      "url": urls[i],
+      "adId": adIds[i],
+      "chromeOptions": {
+        "headless": 'new',
+      },
+      "crawlOptions": jobSpec.crawlOptions,
+      "scrapeOptions": jobSpec.scrapeOptions,
+      "profileOptions": {
+        "useExistingProfile": false,
+        "writeProfile": false
+      },
+    };
+    crawlMessages.push(message);
+  }
+  return crawlMessages;
 }
 
 // Writes a list of crawl messages to the AMQP queue.

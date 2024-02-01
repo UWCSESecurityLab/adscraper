@@ -107,3 +107,15 @@ export interface ProfileCrawlList {
   // Name/label for the crawl.
   crawlName: string;
 }
+
+export interface JobSpecWithProfileCrawlLists extends JobSpec {
+  profileCrawlLists: ProfileCrawlList[];
+}
+
+export interface JobSpecWithCrawlList extends JobSpec {
+  crawlList: string;
+}
+
+export interface JobSpecWithAdUrlCrawlList extends JobSpec {
+  adUrlCrawlList: string;
+}
