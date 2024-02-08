@@ -140,6 +140,12 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       fs.createReadStream(crawlListFile)
         .pipe(csvParser())
         .on('data', data => {
+          if (!data.ad_id) {
+            reject(new Error('ad_id column missing from adUrlList'));
+          }
+          if (!data.url) {
+            reject(new Error('url column missing from adUrlList'));
+          }
           crawlList.push(data.url);
           crawlListAdIds.push(data.ad_id);
         }).on('end', () => {

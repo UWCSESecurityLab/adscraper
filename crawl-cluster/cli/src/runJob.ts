@@ -272,6 +272,12 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
     fs.createReadStream(adUrlCrawlList)
       .pipe(csvParser())
       .on('data', data => {
+        if (!data.ad_id) {
+          reject(new Error('ad_id column missing from adUrlCrawlList'));
+        }
+        if (!data.url) {
+          reject(new Error('url column missing from adUrlCrawlList'));
+        }
         urls.push(data.url);
         adIds.push(data.ad_id);
       }).on('end', () => {
