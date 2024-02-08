@@ -279,7 +279,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
           reject(new Error('url column missing from adUrlCrawlList'));
         }
         urls.push(data.url);
-        adIds.push(data.ad_id);
+        adIds.push(Number.parseInt(data.ad_id));
       }).on('end', () => {
         resolve();
       });

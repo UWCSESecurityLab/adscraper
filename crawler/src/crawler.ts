@@ -147,7 +147,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             reject(new Error('url column missing from adUrlList'));
           }
           crawlList.push(data.url);
-          crawlListAdIds.push(data.ad_id);
+          crawlListAdIds.push(Number.parseInt(data.ad_id));
         }).on('end', () => {
           resolve();
         });
