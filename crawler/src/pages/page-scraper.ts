@@ -138,9 +138,9 @@ async function scrapePageContent(
       timestamp: new Date(),
       url: page.url(),
       // Save relative path to the files in the database
-      html: htmlFile.replace(FLAGS.outputDir, ''),
-      mhtml: mhtmlFile.replace(FLAGS.outputDir, ''),
-      screenshot: screenshotFile.replace(FLAGS.outputDir, ''),
+      html: htmlFile.replace(`${FLAGS.outputDir}/`, ''),
+      mhtml: mhtmlFile.replace(`${FLAGS.outputDir}/`, ''),
+      screenshot: screenshotFile.replace(`${FLAGS.outputDir}/`, ''),
     };
   } catch (e) {
     throw e;

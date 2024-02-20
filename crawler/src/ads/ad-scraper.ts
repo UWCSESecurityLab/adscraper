@@ -350,7 +350,7 @@ async function scrapeAdContent(
   return {
     timestamp: new Date(),
     // Save path to screenshot in database as relative path
-    screenshot: screenshotFailed ? undefined : savePath.replace(FLAGS.outputDir, ''),
+    screenshot: screenshotFailed ? undefined : savePath.replace(`${FLAGS.outputDir}/`, ''),
     html: html,
     max_bid_price: prebid?.max_bid_price,
     winning_bid: prebid?.winning_bid,
