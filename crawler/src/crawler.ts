@@ -19,7 +19,7 @@ sourceMapSupport.install();
 
 export interface CrawlerFlags {
   crawlName?: string,
-  jobId: number,
+  jobId?: number,
   crawlId?: number,
   outputDir: string,
   url?: string,
@@ -378,6 +378,8 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
 
       requests.push({
         timestamp: new Date(),
+        job_id: FLAGS.jobId,
+        crawl_id: CRAWL_ID,
         parent_page: -1, // placeholder
         initiator: page.url(),
         target_url: request.url(),

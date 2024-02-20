@@ -159,8 +159,10 @@ CREATE INDEX iframe_ad_id_index ON iframe(parent_ad);
 
 CREATE TABLE request (
   id SERIAL PRIMARY KEY,
-  timestamp TIMESTAMPTZ,
+  job_id INTEGER REFERENCES job(id),
+  crawl_id INTEGER REFERENCES crawl(id),
   parent_page INTEGER REFERENCES page(id),
+  timestamp TIMESTAMPTZ,
   initiator TEXT,
   target_url TEXT,
   resource_type TEXT,

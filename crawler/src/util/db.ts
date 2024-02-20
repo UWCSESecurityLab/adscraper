@@ -67,6 +67,8 @@ export interface Page {
 
 export interface WebRequest {
   timestamp: Date,
+  job_id?: number,
+  crawl_id: number,
   parent_page: number,
   initiator: string,
   target_url: string,
