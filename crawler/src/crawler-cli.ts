@@ -146,8 +146,9 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   },
   {
     name: 'crawl_page_with_ads',
-    type: Boolean,
-    description: 'Crawl page with ads: if included, in addition to crawling the home page, crawl a page on this domain that has ads.',
+    type: Number,
+    defaultValue: 0,
+    description: 'Crawl pages with ads: if included, on addition to crawling the URLs from the crawl list, the crawler will crawl additional links on the page with ads. Pass the number of additional pages you want to visit.',
     group: 'crawlOptions'
   },
   {
@@ -321,7 +322,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       crawlOptions: {
         shuffleCrawlList: Boolean(options.shuffleCrawlList),
         findAndCrawlArticlePage: Boolean(options.crawl_article),
-        findAndCrawlPageWithAds: Boolean(options.crawl_page_with_ads),
+        findAndCrawlPageWithAds: options.crawl_page_with_ads,
       },
 
       scrapeOptions: {

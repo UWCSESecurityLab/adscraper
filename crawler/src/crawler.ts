@@ -9,7 +9,7 @@ import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
-import { findArticle, findPageWithAds } from './pages/find-page.js';
+import SubpageExplorer from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
 import DbClient, { WebRequest } from './util/db.js';
 import * as log from './util/log.js';
@@ -36,7 +36,7 @@ export interface CrawlerFlags {
 
   crawlOptions: {
     shuffleCrawlList: boolean,
-    findAndCrawlPageWithAds: boolean,
+    findAndCrawlPageWithAds: number,
     findAndCrawlArticlePage: boolean
   }
 
@@ -259,9 +259,11 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
               pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.MAIN });
             }
 
+            let subpageExplorer = new SubpageExplorer();
+
             // Open additional pages (if specified) and scrape them (if specified)
             if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
-              const articleUrl = await findArticle(seedPage);
+              const articleUrl = await subpageExplorer.findArticle(seedPage);
               if (articleUrl) {
                 const articlePage = await BROWSER.newPage();
                 await loadAndHandlePage(articleUrl, articlePage, {
@@ -275,8 +277,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
               }
             }
 
-            if (FLAGS.crawlOptions.findAndCrawlPageWithAds) {
-              const urlWithAds = await findPageWithAds(seedPage);
+            for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
+              const urlWithAds = await subpageExplorer.findPageWithAds(seedPage);
               if (urlWithAds) {
                 const adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {
