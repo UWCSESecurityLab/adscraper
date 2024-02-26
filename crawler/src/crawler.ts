@@ -288,7 +288,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
                 });
                 await adsPage.close();
               } else {
-                log.strError(`${url}: Couldn't find article`);
+                log.strError(`${url}: Couldn't find page with ads`);
+                break;
               }
             }
           } catch (e: any) {
