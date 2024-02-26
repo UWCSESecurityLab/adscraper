@@ -51,7 +51,7 @@ interface CrawlOptions   {
 
   // In addition to crawling the URL given, look for a link on the page
   // that leads to a page with ads, and crawl that (using the same crawl settings).
-  findAndCrawlPageWithAds: boolean;
+  findAndCrawlPageWithAds: number;
 
   // In addition to crawling the URL given, look for an article in the page's
   // RSS feed, if it has one, and crawl that (using the same crawl settings).
