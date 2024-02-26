@@ -19,7 +19,7 @@ interface ScrapedPage {
   timestamp: Date,
   url: string,
   html: string,
-  mhtml: string,
+  mhtml?: string,
   screenshot: string,
 }
 
@@ -115,11 +115,11 @@ async function scrapePageContent(
     fs.writeFileSync(htmlFile, html);
 
     // Save page snapshot
-    const cdp = await page.target().createCDPSession();
-    await cdp.send('Page.enable');
-    const mhtml = (await cdp.send('Page.captureSnapshot', { format: 'mhtml' })).data;
-    const mhtmlFile = path.join(outputDir, filename + '_snapshot.mhtml');
-    fs.writeFileSync(mhtmlFile, mhtml);
+    // const cdp = await page.target().createCDPSession();
+    // await cdp.send('Page.enable');
+    // const mhtml = (await cdp.send('Page.captureSnapshot', { format: 'mhtml' })).data;
+    // const mhtmlFile = path.join(outputDir, filename + '_snapshot.mhtml');
+    // fs.writeFileSync(mhtmlFile, mhtml);
 
     // Save screenshot
     const buf = await page.screenshot({ fullPage: true });
@@ -139,7 +139,7 @@ async function scrapePageContent(
       url: page.url(),
       // Save relative path to the files in the database
       html: htmlFile.replace(`${FLAGS.outputDir}/`, ''),
-      mhtml: mhtmlFile.replace(`${FLAGS.outputDir}/`, ''),
+      // mhtml: mhtmlFile.replace(`${FLAGS.outputDir}/`, ''),
       screenshot: screenshotFile.replace(`${FLAGS.outputDir}/`, ''),
     };
   } catch (e) {
