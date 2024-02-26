@@ -278,7 +278,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             }
 
             for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
-              const urlWithAds = await subpageExplorer.findPageWithAds(seedPage);
+              const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
               if (urlWithAds) {
                 const adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {

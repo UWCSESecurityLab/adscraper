@@ -20,43 +20,63 @@ export default class SubpageExplorer {
    * meets the criteria.
    * Returns the first link meeting the criteria
    * @param page Page to look at links from
-   * @param guessCriteria Function to be evaluated on a candidate page
-   * @param prevGuesses Set of URLs that have already been guessed
    * @param maxGuesses Maximum number of links to explore
+   * @param pageCriteria Function to be evaluated on a candidate page
+   * @param optionalLinkCriteria Function to be evaluated on a candidate URL;
+   * optional meaning if no links fit the criteria, this filter will be ignored.
    * @returns URL for the first matching page, or undefined if no page was found.
    */
   async randomGuessPage(
       page: Page,
       maxGuesses: number,
-      guessCriteria: (page: Page) => Promise<boolean>): Promise<string | undefined> {
-    const sameDomainLinks = await page.evaluate(() => {
+      pageCriteria: (page: Page) => Promise<boolean>,
+      optionalLinkCriteria?: (url: string) => boolean): Promise<string | undefined> {
+    // Get all links on the page that share the same hostname
+    const sameOriginLinks = await page.evaluate(() => {
       return Array.from(document.querySelectorAll('a'))
         .map(a => a.href)
         .filter(href => {
           try {
-            return new URL(href).hostname == window.location.hostname &&
-                !this.prevGuesses.has(href);
-          } catch(e) {
+            return new URL(href).hostname == window.location.hostname
+          } catch (e) {
             return false;
-          }}
-        );
+          }
+        });
     });
-    if (sameDomainLinks.length === 0) {
+
+    // Filter out links that have previously been explored
+    let validLinks = sameOriginLinks.filter(href => !this.prevGuesses.has(href));
+
+    let linksToExplore: string[] = validLinks;
+
+    // Filter on optional link criteria if provided. If no links meet the
+    // criteria, use the original set of valid links.
+    if (optionalLinkCriteria) {
+      let filteredLinks = validLinks.filter(optionalLinkCriteria);
+      if (filteredLinks.length > 0) {
+        log.verbose(`${page.url()}: ${filteredLinks.length} links met the optional criteria`);
+        linksToExplore = filteredLinks;
+      } else {
+        log.verbose(`${page.url()}: No links met the optional criteria; using all links`);
+      }
+    }
+
+    if (linksToExplore.length === 0) {
       log.verbose(`${page.url()}: no subpages explored; could not find links on page`);
       return;
     }
 
     const guessPage = await page.browser().newPage();
     let currentGuess = 0;
-    while (sameDomainLinks.length > 0 && currentGuess < maxGuesses) {
-      let idx = getRandomInt(0, sameDomainLinks.length);
-      let url = sameDomainLinks.splice(idx, 1)[0];
+    while (linksToExplore.length > 0 && currentGuess < maxGuesses) {
+      let idx = getRandomInt(0, linksToExplore.length);
+      let url = linksToExplore.splice(idx, 1)[0];
       // log.info(`${page.url()}: Trying link ${url}`);
       try {
         await guessPage.goto(url, {timeout: globalThis.PAGE_NAVIGATION_TIMEOUT});
         this.prevGuesses.add(url);
         await sleep(1500);
-        if (await guessCriteria(guessPage)) {
+        if (await pageCriteria(guessPage)) {
           log.verbose(`${page.url()}: Found a subpage that met the criteria at ${url}`);
           await guessPage.close();
           return url;
@@ -122,6 +142,18 @@ export default class SubpageExplorer {
     });
   }
 
+  async findHealthRelatedPagesWithAds(page: Page) {
+    log.info(`${page.url()}: Finding random page with ads on it, prioritizing health-related pages`);
+    let withAds = async (page: Page) => {
+      const ads = await adDetection.identifyAdsInDOM(page)
+      return ads.size > 0;
+    };
+    let healthKeywordsInUrl = (url: string) => {
+      return HEALTH_KEYWORDS.some(keyword => url.toLowerCase().includes(keyword));
+    }
+
+    return this.randomGuessPage(page, 20, withAds, healthKeywordsInUrl)
+  }
 }
 
 function getRandomInt(min: number, max: number) {
@@ -230,3 +262,51 @@ const isReaderableScript = `
       exports.isProbablyReaderable = isProbablyReaderable;
     }
     `;
+
+const HEALTH_KEYWORDS = [
+  'health',
+  'wellness',
+  'medicine',
+  'medical',
+  'dental',
+  'doctor',
+  'dentist',
+  'hospital',
+  'clinic',
+  'nurse',
+  'pharmacy',
+  'pharmaceutical',
+  'prescription',
+  'vaccine',
+  'vaccination',
+  'treatment',
+  'covid',
+  'coronavirus',
+  'virus',
+  'disease',
+  'sick',
+  'illn',
+  'infect',
+  'contagious',
+  'stroke',
+  'cancer',
+  'dementia',
+  'alzheimer',
+  'diabetes',
+  'tumor',
+  'tumour',
+  'leukemia',
+  'lymphoma',
+  'aids',
+  'cirrhosis',
+  'std',
+  'wart',
+  'herpes',
+  'psoriasis',
+  'eczema',
+  'bowel',
+  'syndrome',
+  'ischemic',
+  'arthritis',
+  'hypertension'
+];
