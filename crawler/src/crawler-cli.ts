@@ -27,21 +27,27 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'name',
     type: String,
-    description: 'Name of this crawl, for your reference. (Optional)',
+    description: 'Name of this crawl (optional).',
     group: 'main',
   },
-  {
-    name: 'crawl_id',
-    type: Number,
-    description: 'If resuming a previous crawl, the id of the previous crawl (Optional).',
-    group: 'main'
-  },
+  // {
+  //   name: 'crawl_id',
+  //   type: Number,
+  //   description: 'If resuming a previous crawl, the id of the previous crawl (Optional).',
+  //   group: 'main'
+  // },
   {
     name: 'job_id',
     alias: 'j',
     type: Number,
-    description: 'ID of the job that is managing this crawl (Optional, required if run via the crawl coordinator)',
+    description: 'ID of the job that is managing this crawl (Optional, required if run via Kubernetes job)',
     group: 'main'
+  },
+  {
+    name: 'resume_if_able',
+    type: Boolean,
+    defaultOption: false,
+    description: 'If included, the crawler will attempt to resume any previous incomplete crawl with the same name, if one exists. Otherwise, a new crawl record is created and this has no effect.'
   },
   {
     name: 'log_level',
@@ -303,14 +309,15 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 (async function() {
   try {
     await crawler.crawl({
-      crawlName: options.name,
       jobId: options.job_id,
+      // crawlId: options.crawl_id,
+      crawlName: options.name,
+      resumeIfAble: options.resume_if_able,
       outputDir: options.output_dir,
       url: options.url,
       adId: options.ad_id,
       urlList: options.crawl_list,
       adUrlList: options.ad_url_crawl_list,
-      crawlId: options.crawl_id,
       logLevel: logLevel,
 
       chromeOptions: {

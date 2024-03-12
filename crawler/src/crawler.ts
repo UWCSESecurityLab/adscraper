@@ -2,7 +2,7 @@ import csvParser from 'csv-parser';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { ClientConfig } from 'pg';
+import { ClientConfig, QueryResult } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
 import { Browser, HTTPRequest, Page } from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
@@ -18,9 +18,10 @@ import { createAsyncTimeout, sleep } from './util/timeout.js';
 sourceMapSupport.install();
 
 export interface CrawlerFlags {
-  crawlName?: string,
   jobId?: number,
   crawlId?: number,
+  crawlName?: string,
+  resumeIfAble: boolean,
   outputDir: string,
   url?: string,
   adId?: number,
@@ -114,13 +115,17 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   let crawlListAdIds: number[] = [];
   let isAdUrlCrawl = false;
 
+  // Determine how to read and parse the crawl list
   if (flags.url) {
+    // Single URL provided
     crawlList = [flags.url];
     if (flags.adId) {
+      // URL is an ad URL
       crawlListAdIds = [flags.adId];
       isAdUrlCrawl = true;
     }
   } else if (flags.urlList) {
+    // File containing list of URLs provided
     if (!fs.existsSync(flags.urlList)) {
       console.log(`${flags.urlList} does not exist.`);
       process.exit(1);
@@ -131,6 +136,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       .filter((url: string) => url.length > 0);
     crawlListFile = flags.urlList;
   } else if (flags.adUrlList) {
+    // File containing list of ad URLs provided
     crawlListFile = flags.adUrlList;
     if (!fs.existsSync(crawlListFile)) {
       console.log(`${crawlListFile} does not exist.`);
@@ -172,11 +178,10 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   // Now that the length of the crawl list is known, set the global timeout
   const OVERALL_TIMEOUT = crawlList.length * 15 * 60 * 1000;
 
-  // Set up crawl entry, or resume from previous.
-  // let crawlId: number;
   let crawlListStartingIndex = 0;
-  if (!FLAGS.crawlId) {
-    globalThis.CRAWL_ID = await db.insert({
+
+  async function createCrawlEntry(): Promise<number> {
+    return db.insert({
       table: 'crawl',
       returning: 'id',
       data: {
@@ -191,24 +196,43 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         crawler_hostname: os.hostname(),
         crawler_ip: await getPublicIp()
       }
-    }) as number;
+    });
+  }
+
+  // If a crawl name is passed, determine if we should resume a previous crawl.
+  if (FLAGS.crawlName) {
+    // First, check if crawl with that name exists
+    const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE name=$1', [FLAGS.crawlName]);
+    let crawlExists = prevCrawl.rowCount && prevCrawl.rowCount > 0;
+
+    // If it does, verify that it can be resumed
+    if (crawlExists && FLAGS.resumeIfAble) {
+      // Check that the crawl list name is the same
+      if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
+        console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+        process.exit(1);
+      }
+      // Check that the crawl list length is the same
+      if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
+        console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
+        process.exit(1);
+      }
+      // Check if the crawl is already completed
+      if (prevCrawl.rows[0].completed) {
+        console.log(`Crawl with name ${FLAGS.crawlName} is already completed`);
+        process.exit(1);
+      }
+
+      // Then assign the crawl id and starting index
+      globalThis.CRAWL_ID = prevCrawl.rows[0].id;
+      crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
+    } else {
+      // If it doesn't exist, then create a new crawl entry with the given name
+      globalThis.CRAWL_ID = await createCrawlEntry();
+    }
   } else {
-    const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE id=$1', [FLAGS.crawlId]);
-    // Check if crawl inputs match the stored inputs of the previous crawl
-    if (prevCrawl.rowCount !== 1) {
-      console.log(`Invalid crawl_id: ${FLAGS.crawlId}`);
-      process.exit(1);
-    }
-    if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
-      console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
-      process.exit(1);
-    }
-    if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
-      console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
-      process.exit(1);
-    }
-    globalThis.CRAWL_ID = FLAGS.crawlId;
-    crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
+    // If no crawl name is passed, then create a new crawl entry
+    globalThis.CRAWL_ID = await createCrawlEntry();
   }
 
   // Open browser
@@ -361,34 +385,39 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     await page.setRequestInterception(true);
     let requests: WebRequest[] = [];
     const captureThirdPartyRequests = async (request: HTTPRequest) => {
-      // Exit if request capture is disabled
-      if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
-        request.continue(undefined, 0);
-        return;
-      }
+      try {
+        // Exit if request capture is disabled
+        if (!FLAGS.scrapeOptions.captureThirdPartyRequests) {
+          request.continue(undefined, 0);
+          return;
+        }
 
-      // Exit if request is navigating this tab
-      if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
-        request.continue(undefined, 0);
-        return;
-      }
+        // Exit if request is navigating this tab
+        if (request.isNavigationRequest() && request.frame() === page.mainFrame()) {
+          request.continue(undefined, 0);
+          return;
+        }
 
-      // Exclude same origin requests
-      if (new URL(request.url()).origin == new URL(page.url()).origin) {
-        request.continue(undefined, 0);
-        return;
-      }
+        // Exclude same origin requests
+        if (new URL(request.url()).origin == new URL(page.url()).origin) {
+          request.continue(undefined, 0);
+          return;
+        }
 
-      requests.push({
-        timestamp: new Date(),
-        job_id: FLAGS.jobId,
-        crawl_id: CRAWL_ID,
-        parent_page: -1, // placeholder
-        initiator: page.url(),
-        target_url: request.url(),
-        resource_type: request.resourceType(),
-      });
-      request.continue(undefined, 0);
+        requests.push({
+          timestamp: new Date(),
+          job_id: FLAGS.jobId,
+          crawl_id: CRAWL_ID,
+          parent_page: -1, // placeholder
+          initiator: page.url(),
+          target_url: request.url(),
+          resource_type: request.resourceType(),
+        });
+        request.continue(undefined, 0);
+      } catch (e) {
+        log.warning(`${page.url()}: Error handling intercepted request: ${(e as Error).message}`);
+        request.continue(undefined, 0);
+      }
     };
     page.on('request', captureThirdPartyRequests);
 

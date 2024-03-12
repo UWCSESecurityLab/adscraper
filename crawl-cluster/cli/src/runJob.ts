@@ -201,7 +201,8 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
     // TODO: generate crawlIds here to simplify retry handling?
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
-      "crawlName": crawlSpec.crawlName,
+      "crawlName": `job${jobId}_` + crawlSpec.crawlName,
+      "resumeIfAble": true,
       "outputDir": jobSpec.dataDir,
       "urlList": crawlSpec.crawlListFile,
       "chromeOptions": {
@@ -242,6 +243,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
       "outputDir": jobSpec.dataDir,
+      "resumeIfAble": false,
       "url": url,
       "chromeOptions": {
         "headless": 'new',
@@ -288,6 +290,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
       "outputDir": jobSpec.dataDir,
+      "resumeIfAble": false,
       "url": urls[i],
       "adId": adIds[i],
       "chromeOptions": {
