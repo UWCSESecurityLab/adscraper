@@ -139,6 +139,12 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'chromeOptions'
   },
   {
+    name: 'proxy_server',
+    type: String,
+    description: 'Proxy server that all Chrome traffic should pass through (Optional). This value is passed directly to Chrome\'s --proxy_server flag.',
+    group: 'chromeOptions'
+  },
+  {
     name: 'shuffle_crawl_list',
     type: Boolean,
     description: 'Include this arg to randomize the order the URLs in the crawl list are visited.',
@@ -323,7 +329,8 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
       chromeOptions: {
         headless: headless,
         profileDir: options.profile_dir,
-        executablePath: options.executable_path
+        executablePath: options.executable_path,
+        proxyServer: options.proxy_server
       },
 
       crawlOptions: {

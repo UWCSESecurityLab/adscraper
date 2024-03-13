@@ -32,7 +32,8 @@ export interface CrawlerFlags {
   chromeOptions: {
     profileDir?: string,
     headless: boolean | 'new',
-    executablePath?: string
+    executablePath?: string,
+    proxyServer?: string
   }
 
   crawlOptions: {
@@ -240,8 +241,13 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
 
   puppeteerExtra.default.use(StealthPlugin())
 
+  let chromeArgs: string[] = ['--disable-dev-shm-usage'];
+  if (FLAGS.chromeOptions.proxyServer) {
+    chromeArgs.push(`--proxy-server=${FLAGS.chromeOptions.proxyServer}`);
+  }
+
   globalThis.BROWSER = await puppeteerExtra.default.launch({
-    args: ['--disable-dev-shm-usage'],
+    args: chromeArgs,
     defaultViewport: VIEWPORT,
     headless: FLAGS.chromeOptions.headless,
     handleSIGINT: false,

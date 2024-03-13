@@ -87,25 +87,32 @@ interface ScrapeOptions {
   screenshotAdsWithContext: boolean;
 }
 
+// This interface specifies the configuration for individual profiles:
+// which crawl lists to use, where the Chrome profile directory is located,
+// and which proxy server to use.
 export interface ProfileCrawlList {
-  // User provided name for the profile
+  // Name/label for the crawl, used to identify this crawl in the database.
+  crawlName: string;
+
+  // ID for this profile - multiple crawls may share a profileId (e.g.
+  // if the first crawl is for building a profile, the second is for scraping ads).
   profileId: string;
-
-  // Location of the Chrome user-data-dir to use for this crawl.
-  // If the directory doesn't exist, creates a new one at this directory,
-  // called profile_<profileId>
-  profileDir: string;
-
-  // Location the profile should be written to after the crawl,
-  // if you do not want to overwrite the existing profile at
-  // profileDir.
-  newProfileDir: string;
 
   // List of URLs to crawl in this profile.
   crawlListFile: string;
 
-  // Name/label for the crawl.
-  crawlName: string;
+  // Location of the Chrome user-data-dir to use for this crawl.
+  // If the directory doesn't exist, creates a new one at this directory,
+  // called profile_<profileId>
+  profileDir?: string;
+
+  // Location the profile should be written to after the crawl,
+  // if you do not want to overwrite the existing profile at
+  // profileDir.
+  newProfileDir?: string;
+
+  // Proxy server to use for this crawl (optional)
+  proxyServer?: string;
 }
 
 export interface JobSpecWithProfileCrawlLists extends JobSpec {

@@ -208,6 +208,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "chromeOptions": {
         "profileDir": '/home/node/chrome_profile',
         "headless": 'new',
+        "proxyServer": crawlSpec.proxyServer,
       },
       // TODO: also allow individual crawls to override crawl/scrape options if
       // we want to include different types of crawls?
