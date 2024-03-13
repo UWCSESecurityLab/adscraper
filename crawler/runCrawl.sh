@@ -15,6 +15,9 @@ useExistingProfile=$(echo $jobspec | jq ".profileOptions.useExistingProfile") ||
 writeProfile=$(echo $jobspec | jq ".profileOptions.writeProfile") || parseError
 profileDir=$(echo $jobspec | jq -r ".profileOptions.profileDir") || parseError
 newProfileDir=$(echo $jobspec | jq -r ".profileOptions.newProfileDir") || parseError
+sshHost=$(echo $jobspec | jq -r ".profileOptions.sshHost") || parseError
+sshRemotePort=$(echo $jobspec | jq -r ".profileOptions.sshRemotePort") || parseError
+sshKey=$(echo $jobspec | jq -r ".profileOptions.sshKey") || parseError
 
 if [[ $useExistingProfile = true && ! -d "$profileDir" ]]; then
   echo "Warning: no directory exists at $profileDir, creating directory"
@@ -24,6 +27,14 @@ fi
 if [[ $writeProfile = true && -d "$newProfileDir" ]]; then
   echo "Error: $newProfileDir already exists, this would be overwritten"
   exit 1
+fi
+
+if [[ -n "$sshHost" && -n "$sshKey" && -n "$sshRemotePort" ]]; then
+  echo "Starting ssh tunnel"
+  ssh -N -i $sshKey -D 5001 -p $sshRemotePort $sshHost || {
+    echo "SSH tunnel failed to start (Error $?)"
+    exit 1
+  }
 fi
 
 

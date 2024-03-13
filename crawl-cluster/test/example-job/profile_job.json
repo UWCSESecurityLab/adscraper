@@ -3,13 +3,12 @@
   "dataDir": "/home/pptruser/data",
   "maxWorkers": 4,
   "profileOptions": {
-    "profileMode": "profile",
     "useExistingProfile": false,
     "writeProfileAfterCrawl": true
   },
   "crawlOptions": {
     "shuffleCrawlList": false,
-    "findAndCrawlPageWithAds": false,
+    "findAndCrawlPageWithAds": 0,
     "findAndCrawlArticlePage": false
   },
   "scrapeOptions": {
@@ -19,30 +18,30 @@
     "screenshotAdsWithContext": false,
     "captureThirdPartyRequests": true
   },
-  "crawls": [
+  "profileCrawlLists": [
     {
       "crawlName": "profile_crawl_sports",
-      "crawlListFile": "/home/pptruser/data/example-job/sports_history.txt",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/sports_history.txt",
       "crawlListHasReferrerAds": false,
-      "newProfileDir": "/home/pptruser/data/profiles/sports_profile"
+      "profileDir": "/home/pptruser/data/profiles/sports_profile"
     },
     {
       "crawlName": "profile_crawl_health",
-      "crawlListFile": "/home/pptruser/data/example-job/health_history.txt",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/health_history.txt",
       "crawlListHasReferrerAds": false,
-      "newProfileDir": "/home/pptruser/data/profiles/health_profile"
+      "profileDir": "/home/pptruser/data/profiles/health_profile"
     },
     {
       "crawlName": "profile_crawl_cooking",
-      "crawlListFile": "/home/pptruser/data/example-job/cooking_history.txt",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/cooking_history.txt",
       "crawlListHasReferrerAds": false,
-      "newProfileDir": "/home/pptruser/data/profiles/cooking_profile"
+      "profileDir": "/home/pptruser/data/profiles/cooking_profile"
     },
     {
       "crawlName": "profile_crawl_tech",
-      "crawlListFile": "/home/pptruser/data/example-job/tech_history.txt",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/tech_history.txt",
       "crawlListHasReferrerAds": false,
-      "newProfileDir": "/home/pptruser/data/profiles/tech_profile"
+      "profileDir": "/home/pptruser/data/profiles/tech_profile"
     }
   ]
 }

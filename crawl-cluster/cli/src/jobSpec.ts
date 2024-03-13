@@ -113,6 +113,16 @@ export interface ProfileCrawlList {
 
   // Proxy server to use for this crawl (optional)
   proxyServer?: string;
+
+  // SSH tunnel params. If all three args are provided,
+  // the crawler will create an SSH tunnel
+  // to the specified host and port before launching Chrome. Can be useful
+  // for setting up proxy servers.
+  // The crawler will run the following command:
+  // ssh -N -D 5001 -i [sshKey] -p [sshPort] [sshHost]
+  sshHost?: string;
+  sshRemotePort?: string;
+  sshKey?: string;
 }
 
 export interface JobSpecWithProfileCrawlLists extends JobSpec {

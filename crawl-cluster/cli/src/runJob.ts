@@ -218,7 +218,11 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
         "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
         "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
         "profileDir": crawlSpec.profileDir,
-        "newProfileDir": crawlSpec.newProfileDir
+        "newProfileDir": crawlSpec.newProfileDir,
+        "sshKey": crawlSpec.sshKey,
+        "sshHost": crawlSpec.sshHost,
+        "sshRemotePort": crawlSpec.sshRemotePort,
+
       }
     };
     crawlMessages.push(message);
@@ -342,12 +346,16 @@ function sleep(ms: number) {
 main();
 
 // Additional fields passed to runCrawl.sh, to specify if the profile should
-// be copied into the container and/or saved after the crawl.
+// be copied into the container and/or saved after the crawl. See jobSpec
+// for details on each field.
 interface CrawlerFlagsWithProfileHandling extends CrawlerFlags {
   profileOptions: {
     useExistingProfile: boolean;
     writeProfile: boolean;
     profileDir?: string;
     newProfileDir?: string;
+    sshHost?: string;
+    sshRemotePort?: string;
+    sshKey?: string;
   }
 }
