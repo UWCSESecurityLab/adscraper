@@ -121,7 +121,7 @@ export interface ProfileCrawlList {
   // The crawler will run the following command:
   // ssh -N -D 5001 -i [sshKey] -p [sshPort] [sshHost]
   sshHost?: string;
-  sshRemotePort?: string;
+  sshRemotePort?: number;
   sshKey?: string;
 }
 

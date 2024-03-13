@@ -355,7 +355,7 @@ interface CrawlerFlagsWithProfileHandling extends CrawlerFlags {
     profileDir?: string;
     newProfileDir?: string;
     sshHost?: string;
-    sshRemotePort?: string;
+    sshRemotePort?: number;
     sshKey?: string;
   }
 }
