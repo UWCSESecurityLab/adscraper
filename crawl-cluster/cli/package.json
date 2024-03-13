@@ -5,7 +5,7 @@
   "main": "gen/runJob.js",
   "type": "module",
   "scripts": {
-    "build": "tsc && npx typescript-json-schema ./tsconfig.json JobSpec > gen/jobSpecSchema.json"
+    "build": "tsc && npx typescript-json-schema src/jobSpec.ts JobSpec > gen/jobSpecSchema.json"
   },
   "author": "Eric Zeng",
   "license": "MIT",

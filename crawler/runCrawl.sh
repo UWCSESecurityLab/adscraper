@@ -1,19 +1,24 @@
 #!/bin/bash
 
-set -e
+# set -e
 
 # Read jobSpec from stdin (passed from amqp)
 jobspec=$(cat)
 
+function parseError() {
+  echo "Encountered error parsing jobspec: (Error $?)"
+  exit 1
+}
+
 # Parse out profile flags
-useExistingProfile=$(echo $jobspec | jq ".profileOptions.useExistingProfile")
-writeProfile=$(echo $jobspec | jq ".profileOptions.writeProfile")
-profileDir=$(echo $jobspec | jq -r ".profileOptions.profileDir")
-newProfileDir=$(echo $jobspec | jq -r ".profileOptions.newProfileDir")
+useExistingProfile=$(echo $jobspec | jq ".profileOptions.useExistingProfile") || parseError
+writeProfile=$(echo $jobspec | jq ".profileOptions.writeProfile") || parseError
+profileDir=$(echo $jobspec | jq -r ".profileOptions.profileDir") || parseError
+newProfileDir=$(echo $jobspec | jq -r ".profileOptions.newProfileDir") || parseError
 
 if [[ $useExistingProfile = true && ! -d "$profileDir" ]]; then
-  echo "Error: no directory exists at $profileDir"
-  exit 1
+  echo "Warning: no directory exists at $profileDir, creating directory"
+  mkdir -p $profileDir
 fi
 
 if [[ $writeProfile = true && -d "$newProfileDir" ]]; then
@@ -26,20 +31,26 @@ if [[ $useExistingProfile = true ]];
 then
   echo "Copying profile from ${profileDir} to container"
   # TODO: rsync profile from mounted network drive location to container-local storage
-  rsync -a ${profileDir}/ /home/node/chrome_profile
+  rsync -a --no-links ${profileDir}/ /home/node/chrome_profile || {
+    echo "Copying to container via rsync failed (Error $?)"
+    exit 1
+  }
 fi
 
 echo "Running crawler"
 
 # Run crawler
-node gen/crawler-amqp.js <<< "$jobspec"
+node gen/crawler-amqp.js <<< "$jobspec" || echo "Crawler process failed with exit code $?"
 
 if [[ $writeProfile = true ]];
 then
   if [[ $newProfileDir = null ]]; then
     echo "Writing profile to temp location (${profileDir}-temp)"
     # rsync updated profile to temp location in mounted network drive
-    rsync -a /home/node/chrome_profile/ ${profileDir}-temp
+    rsync -a --no-links /home/node/chrome_profile/ ${profileDir}-temp || {
+      echo "Writing to temp location via rsync failed (Error $?), aborting"
+      exit 1
+    }
 
     echo "Deleting old profile"
     # delete old profile
@@ -52,6 +63,9 @@ then
     echo "Writing profile to ${newProfileDir}"
     mkdir -p ${newProfileDir}
     # rsync profile to new profile dir
-    rsync -a /home/node/chrome_profile/ $newProfileDir
+    rsync -a --no-links /home/node/chrome_profile/ $newProfileDir || {
+      echo "Writing to new profile location via rsync failed (Error $?), aborting"
+      exit 1
+    }
   fi
 fi
