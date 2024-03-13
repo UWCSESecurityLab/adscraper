@@ -54,11 +54,9 @@ spec:
       nodeSelector:
         crawler: "true"
       securityContext:
-        fsGroup: 1000
         runAsUser: 1000
         runAsGroup: 1000
-        readOnlyRootFileSystem: false
-        allowPrivilegeEscalation: false
+        fsGroupChangePolicy: "OnRootMismatch"
         capabilities:
             add:
             - SYS_ADMIN
