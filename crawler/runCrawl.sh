@@ -31,7 +31,17 @@ fi
 
 if [[ -n "$sshHost" && -n "$sshKey" && -n "$sshRemotePort" ]]; then
   echo "Starting ssh tunnel"
-  ssh -N -i $sshKey -D 5001 -p $sshRemotePort $sshHost || {
+
+  # Copy ssh keys into container to avoid permissions issues
+  mkdir -p /home/node/.ssh
+  chmod 700 /home/node/.ssh
+  cp $sshKey /home/node/.ssh/id_rsa
+  cp "${sshKey}.pub" /home/node/.ssh/id_rsa.pub
+  chmod 600 /home/node/.ssh/id_rsa
+  chmod 644 /home/node/.ssh/id_rsa.pub
+  chown -R node:node /home/node/.ssh
+
+  ssh -f -N -o StrictHostKeyChecking=no -i /home/node/.ssh/id_rsa -D 5001 -p $sshRemotePort $sshHost || {
     echo "SSH tunnel failed to start (Error $?)"
     exit 1
   }
