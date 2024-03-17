@@ -12,23 +12,6 @@ CREATE TABLE job (
   job_config JSON
 );
 
-CREATE TABLE crawl (
-  id SERIAL PRIMARY KEY,
-  job_id INTEGER REFERENCES job(id),
-  name TEXT,
-  start_time TIMESTAMPTZ,
-  completed BOOLEAN,
-  completed_time TIMESTAMPTZ,
-  crawl_list TEXT,
-  crawl_list_current_index INTEGER,
-  crawl_list_length INTEGER,
-  profile_dir TEXT,
-  crawler_hostname TEXT,
-  crawler_ip TEXT
-  -- geolocation TEXT,
-  -- vpn_hostname TEXT,
-);
-
 -- A row in this table is created for every page visited by the crawler.
 CREATE TABLE page (
   id SERIAL PRIMARY KEY,
@@ -71,14 +54,32 @@ CREATE TABLE page (
   referrer_page_url TEXT,
   -- If this is a subpage or ad landing page, and the parent page was scraped,
   -- the id of the parent page.
-  referrer_page INTEGER references page(id)
+  referrer_page INTEGER references page(id),
   -- If this is an ad landing page, the id of the ad that opened this page.
   -- Field is added later, after the ad table is defined.
   -- referrer_ad INTEGER references ad(id)
 
   -- Error message, if a fatal error is encountered while crawling this page
-  error TEXT;
+  error TEXT
 );
+
+CREATE TABLE crawl (
+  id SERIAL PRIMARY KEY,
+  job_id INTEGER REFERENCES job(id),
+  name TEXT,
+  start_time TIMESTAMPTZ,
+  completed BOOLEAN,
+  completed_time TIMESTAMPTZ,
+  crawl_list TEXT,
+  crawl_list_current_index INTEGER,
+  crawl_list_length INTEGER,
+  profile_dir TEXT,
+  crawler_hostname TEXT,
+  crawler_ip TEXT
+  -- geolocation TEXT,
+  -- vpn_hostname TEXT,
+);
+
 
 CREATE TABLE chumbox (
   id SERIAL PRIMARY KEY,
