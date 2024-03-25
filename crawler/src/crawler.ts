@@ -14,6 +14,7 @@ import { PageType, scrapePage } from './pages/page-scraper.js';
 import DbClient, { WebRequest } from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
+import { removeCookieBanners } from './pages/cookie-banner-remover.js';
 
 sourceMapSupport.install();
 
@@ -477,7 +478,15 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
 
     await page.goto(url, { timeout: globalThis.PAGE_NAVIGATION_TIMEOUT });
     await sleep(PAGE_SLEEP_TIME);
-    log.info(`${url}: Page finished loading`)
+    log.info(`${url}: Page finished loading`);
+
+    // Try to remove all cookie banners that may block content on the page
+    await removeCookieBanners(page);
+
+    // Hit "ESC" to try and dismiss any modal popups
+    await page.keyboard.press('Escape');
+
+    // Scroll down the page to trigger lazy loading
     await scrollDownPage(page);
 
     // Scrape the page
