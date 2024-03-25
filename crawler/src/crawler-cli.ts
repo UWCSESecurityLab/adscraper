@@ -164,6 +164,13 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'crawlOptions'
   },
   {
+    name: 'refresh_pages',
+    type: Boolean,
+    defaultValue: false,
+    description: 'If included, the crawler will refresh each page after each scrape, and scrape the page a second time. Default: false',
+    group: 'crawlOptions'
+  },
+  {
     name: 'scrape_site',
     type: Boolean,
     description: 'If included, the crawler will scrape the content of the sites in the crawl list.',
@@ -337,6 +344,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         shuffleCrawlList: Boolean(options.shuffleCrawlList),
         findAndCrawlArticlePage: Boolean(options.crawl_article),
         findAndCrawlPageWithAds: options.crawl_page_with_ads,
+        refreshPage: options.refresh_pages,
       },
 
       scrapeOptions: {

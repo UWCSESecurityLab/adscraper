@@ -40,6 +40,7 @@ export interface CrawlerFlags {
     shuffleCrawlList: boolean,
     findAndCrawlPageWithAds: number,
     findAndCrawlArticlePage: boolean
+    refreshPage: boolean,
   }
 
   scrapeOptions: {
@@ -284,9 +285,32 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             // Open the URL and scrape it (if specified)
             let pageId;
             if (isAdUrlCrawl) {
-              pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.LANDING, referrerAd: prevAdId });
+              pageId = await loadAndHandlePage(url, seedPage, {
+                pageType: PageType.LANDING,
+                referrerAd: prevAdId,
+                reload: 0
+              });
             } else {
-              pageId = await loadAndHandlePage(url, seedPage, { pageType: PageType.MAIN });
+              pageId = await loadAndHandlePage(url, seedPage, {
+                pageType: PageType.MAIN,
+                reload: 0
+              });
+            }
+
+            if (FLAGS.crawlOptions.refreshPage) {
+              await seedPage.close();
+              seedPage = await BROWSER.newPage();
+              if (isAdUrlCrawl) {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.LANDING,
+                  referrerAd: prevAdId,
+                  reload: 1 });
+              } else {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.MAIN,
+                  reload: 1
+                });
+              }
             }
 
             let subpageExplorer = new SubpageExplorer();
@@ -295,13 +319,24 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
               const articleUrl = await subpageExplorer.findArticle(seedPage);
               if (articleUrl) {
-                const articlePage = await BROWSER.newPage();
+                let articlePage = await BROWSER.newPage();
                 await loadAndHandlePage(articleUrl, articlePage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
-                  referrerPageUrl: seedPage.url()
+                  referrerPageUrl: seedPage.url(),
+                  reload: 0
                 });
                 await articlePage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  articlePage = await BROWSER.newPage();
+                  await loadAndHandlePage(articleUrl, articlePage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await articlePage.close();
+                }
               } else {
                 log.strError(`${url}: Couldn't find article`);
               }
@@ -310,13 +345,24 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
             for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
               const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
               if (urlWithAds) {
-                const adsPage = await BROWSER.newPage();
+                let adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
-                  referrerPageUrl: seedPage.url()
+                  referrerPageUrl: seedPage.url(),
+                  reload: 0
                 });
                 await adsPage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  adsPage = await BROWSER.newPage();
+                  await loadAndHandlePage(urlWithAds, adsPage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await adsPage.close();
+                }
               } else {
                 log.strError(`${url}: Couldn't find page with ads`);
                 break;
@@ -356,7 +402,8 @@ interface LoadPageMetadata {
   pageType: PageType,
   referrerPageId?: number,
   referrerPageUrl?: string,
-  referrerAd?: number
+  referrerAd?: number,
+  reload: number
 }
 
 /**
@@ -383,7 +430,8 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     page_type: metadata.pageType,
     referrer_page: metadata.referrerPageId,
     referrer_page_url: metadata.referrerPageUrl,
-    referrer_ad: metadata.referrerAd
+    referrer_ad: metadata.referrerAd,
+    reload: metadata.reload
   });
 
   try {

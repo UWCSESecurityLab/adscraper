@@ -46,7 +46,7 @@ interface ProfileOptions {
   writeProfileAfterCrawl?: boolean
 }
 
-interface CrawlOptions   {
+interface CrawlOptions {
   shuffleCrawlList: boolean;
 
   // In addition to crawling the URL given, look for a link on the page
@@ -57,6 +57,9 @@ interface CrawlOptions   {
   // RSS feed, if it has one, and crawl that (using the same crawl settings).
   // If no RSS feed exists, uses a heuristic to determine if a page is an article.
   findAndCrawlArticlePage: boolean;
+
+  // Refresh each page after scraping it, and scrape it again.
+  refreshPage: boolean;
 }
 
 interface ScrapeOptions {

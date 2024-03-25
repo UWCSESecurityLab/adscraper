@@ -62,7 +62,8 @@ export interface Page {
   referrer_page?: number,
   referrer_page_url?: string,
   referrer_ad?: number,
-  error?: string
+  error?: string,
+  reload?: number
 }
 
 export interface WebRequest {

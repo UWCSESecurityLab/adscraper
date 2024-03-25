@@ -49,6 +49,11 @@ CREATE TABLE page (
   -- or landing page)
   original_url TEXT,
 
+  -- The crawler can be configured to refresh a page and crawl it again.
+  -- This field indicates how many times this page has been loaded/reloaded,
+  -- prior to and including this page's load.
+  reload INTEGER,
+
   ------ Scraped Content ------
   -- Fields in this section are optional, page content is only scraped when
   -- the crawler is using the --scrape_page or --clickAndScrapeLandingPage args.
