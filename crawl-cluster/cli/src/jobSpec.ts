@@ -102,7 +102,9 @@ export interface ProfileCrawlList {
   profileId: string;
 
   // List of URLs to crawl in this profile.
-  crawlListFile: string;
+  crawlListFile?: string;
+  // OR, the single URL to crawl
+  url?: string;
 
   // Location of the Chrome user-data-dir to use for this crawl.
   // If the directory doesn't exist, creates a new one at this directory,

@@ -198,13 +198,13 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
     let crawlSpec = crawl as ProfileCrawlList;
     // Messages to put in the queue, to be consumed by crawler. Implements
     // the CrawlerFlags interface.
-    // TODO: generate crawlIds here to simplify retry handling?
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
-      "crawlName": `job${jobId}_` + crawlSpec.crawlName,
+      "crawlName": crawlSpec.crawlName ? crawlSpec.crawlName : undefined,
       "resumeIfAble": true,
       "outputDir": jobSpec.dataDir,
-      "urlList": crawlSpec.crawlListFile,
+      // "urlList": crawlSpec.crawlListFile,
+      "profileId": crawlSpec.profileId,
       "chromeOptions": {
         "profileDir": '/home/node/chrome_profile',
         "headless": 'new',
@@ -215,16 +215,23 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "crawlOptions": jobSpec.crawlOptions,
       "scrapeOptions": jobSpec.scrapeOptions,
       "profileOptions": {
-        "useExistingProfile": jobSpec.profileOptions.useExistingProfile ? true : false,
-        "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl ? true : false,
+        "useExistingProfile": jobSpec.profileOptions.useExistingProfile && crawlSpec.profileDir ? true : false,
+        "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl && (crawlSpec.profileDir || crawlSpec.newProfileDir) ? true : false,
         "profileDir": crawlSpec.profileDir,
         "newProfileDir": crawlSpec.newProfileDir,
         "sshKey": crawlSpec.sshKey,
         "sshHost": crawlSpec.sshHost,
         "sshRemotePort": crawlSpec.sshRemotePort,
-
       }
     };
+    if (crawlSpec.crawlListFile) {
+      message.urlList = crawlSpec.crawlListFile;
+    } else if (crawlSpec.url) {
+      message.url = crawlSpec.url;
+    } else {
+      console.log(`Error: No crawl list file or crawl URL provided for profile ${crawlSpec.crawlName}.`);
+      process.exit(1);
+    }
     crawlMessages.push(message);
   }
   return crawlMessages;

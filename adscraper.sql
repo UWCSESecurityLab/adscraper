@@ -22,6 +22,7 @@ CREATE TABLE crawl (
   crawl_list TEXT,
   crawl_list_current_index INTEGER,
   crawl_list_length INTEGER,
+  profile_id TEXT,
   profile_dir TEXT,
   crawler_hostname TEXT,
   crawler_ip TEXT
