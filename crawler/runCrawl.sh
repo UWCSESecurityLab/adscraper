@@ -29,7 +29,7 @@ if [[ $writeProfile = true && -d "$newProfileDir" ]]; then
   exit 1
 fi
 
-if [[ -n "$sshHost" && -n "$sshKey" && -n "$sshRemotePort" ]]; then
+if [[ -z "$sshHost" && -z "$sshKey" && -z "$sshRemotePort" ]]; then
   echo "Starting ssh tunnel"
 
   # Copy ssh keys into container to avoid permissions issues
