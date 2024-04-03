@@ -330,7 +330,7 @@ function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: 
     async function write() {
       let ok = true;
       do {
-        let message = messages.pop();
+        let message = messages.shift();
         ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)));
         await sleep(1);
         pbar.increment();
