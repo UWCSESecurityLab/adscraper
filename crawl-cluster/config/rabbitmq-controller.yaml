@@ -21,15 +21,17 @@ spec:
           limits:
             cpu: 100m
         env:
-        - name: CONFIG_FILE
-          value: /etc/rabbitmq-custom-conf/rabbitmq.conf
-        volumeMounts:
-          - name: rabbitmq-config
-            mountPath: /etc/rabbitmq-custom-conf
-      volumes:
-        - name: rabbitmq-config
-          configMap:
-            name: rabbitmq-configmap
-            items:
-              - key: rabbitmq.conf
-                path: rabbitmq.conf
+          - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
+            value: "-rabbit consumer_timeout 86400000"
+      #   - name: CONFIG_FILE
+      #     value: /etc/rabbitmq-custom-conf/rabbitmq.conf
+      #   volumeMounts:
+      #     - name: rabbitmq-config
+      #       mountPath: /etc/rabbitmq-custom-conf
+      # volumes:
+      #   - name: rabbitmq-config
+      #     configMap:
+      #       name: rabbitmq-configmap
+      #       items:
+      #         - key: rabbitmq.conf
+      #           path: rabbitmq.conf
