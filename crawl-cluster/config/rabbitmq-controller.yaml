@@ -20,3 +20,10 @@ spec:
         resources:
           limits:
             cpu: 100m
+        volumeMounts:
+          - name: rabbitmq-config
+            mountPath: /etc/rabbitmq
+    volumes:
+      - name: rabbitmq-config
+        configMap:
+          name: rabbitmq-configmap
