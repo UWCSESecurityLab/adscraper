@@ -20,10 +20,16 @@ spec:
         resources:
           limits:
             cpu: 100m
+        env:
+        - name: CONFIG_FILE
+          value: =/etc/rabbitmq-custom-conf/rabbitmq.conf
         volumeMounts:
           - name: rabbitmq-config
-            mountPath: /etc/rabbitmq
+            mountPath: /etc/rabbitmq-custom-conf
     volumes:
       - name: rabbitmq-config
         configMap:
           name: rabbitmq-configmap
+          items:
+            - key: rabbitmq.conf
+              path: rabbitmq.conf
