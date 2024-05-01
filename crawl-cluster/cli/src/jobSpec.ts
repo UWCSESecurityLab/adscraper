@@ -29,9 +29,6 @@ export default interface JobSpec {
 }
 
 interface ProfileOptions {
-  // In "profile" mode, there are several options to specify how profiles
-  // should be read, written, or updated.
-
   // Specifies whether crawlers should use an existing Chrome profile.
   // If true, Chrome will be launched with a copy of the userDataDir specified in
   // |crawls.profileDir| for each crawl.
@@ -44,6 +41,22 @@ interface ProfileOptions {
   // |crawls.newProfileDir| if provided, or updates the existing profile in
   // |crawls.profileDir| if not.
   writeProfileAfterCrawl?: boolean
+
+  // Proxy server to use for all profiles/crawls in this job (optional).
+  // Launches Chrome with the provided SOCKS proxy URL.
+  // Overridden if a proxy server is specified in a ProfileCrawlList.
+  proxyServer?: string;
+
+  // SSH tunnel params for all profiles/crawls in this job (optional).
+  // If all three args are provided, the crawler will create an SSH tunnel
+  // to the specified host and port before launching Chrome.
+  // Can be useful for setting up a connection to a proxy.
+  // Overridden if SSH params are specified in a ProfileCrawlList.
+  // The crawler will run the following command:
+  // ssh -N -D 5001 -i [sshKey] -p [sshPort] [sshHost]
+  sshHost?: string;
+  sshRemotePort?: number;
+  sshKey?: string;
 }
 
 interface CrawlOptions {
@@ -116,13 +129,16 @@ export interface ProfileCrawlList {
   // profileDir.
   newProfileDir?: string;
 
-  // Proxy server to use for this crawl (optional)
+  // Proxy server to use for this profile's crawl (optional).
+  // Launches Chrome with the provided SOCKS proxy URL.
+  // Overrides the proxy server if specified in ProfileOptions.
   proxyServer?: string;
 
-  // SSH tunnel params. If all three args are provided,
-  // the crawler will create an SSH tunnel
-  // to the specified host and port before launching Chrome. Can be useful
-  // for setting up proxy servers.
+  // SSH tunnel params for this profile's crawl (optional).
+  // If all three args are provided, the crawler will create an SSH tunnel
+  // to the specified host and port before launching Chrome.
+  // Overrides the SSH params if specified in ProfileOptions.
+  // Can be useful for setting up SOCKS proxy servers for masking the IP.
   // The crawler will run the following command:
   // ssh -N -D 5001 -i [sshKey] -p [sshPort] [sshHost]
   sshHost?: string;

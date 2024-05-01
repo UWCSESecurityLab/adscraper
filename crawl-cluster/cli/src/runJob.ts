@@ -208,7 +208,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "chromeOptions": {
         "profileDir": '/home/node/chrome_profile',
         "headless": 'new',
-        "proxyServer": crawlSpec.proxyServer,
+        "proxyServer": crawlSpec.proxyServer ? crawlSpec.proxyServer : jobSpec.profileOptions.proxyServer,
       },
       // TODO: also allow individual crawls to override crawl/scrape options if
       // we want to include different types of crawls?
@@ -219,9 +219,9 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
         "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl && (crawlSpec.profileDir || crawlSpec.newProfileDir) ? true : false,
         "profileDir": crawlSpec.profileDir,
         "newProfileDir": crawlSpec.newProfileDir,
-        "sshKey": crawlSpec.sshKey,
-        "sshHost": crawlSpec.sshHost,
-        "sshRemotePort": crawlSpec.sshRemotePort,
+        "sshKey": crawlSpec.sshKey ? crawlSpec.sshKey : jobSpec.profileOptions.sshKey,
+        "sshHost": crawlSpec.sshHost ? crawlSpec.sshHost : jobSpec.profileOptions.sshHost,
+        "sshRemotePort": crawlSpec.sshRemotePort ? crawlSpec.sshRemotePort : jobSpec.profileOptions.sshRemotePort
       }
     };
     if (crawlSpec.crawlListFile) {
@@ -259,12 +259,16 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
       "url": url,
       "chromeOptions": {
         "headless": 'new',
+        "proxyServer": jobSpec.profileOptions.proxyServer
       },
       "crawlOptions": jobSpec.crawlOptions,
       "scrapeOptions": jobSpec.scrapeOptions,
       "profileOptions": {
         "useExistingProfile": false,
-        "writeProfile": false
+        "writeProfile": false,
+        "sshHost": jobSpec.profileOptions.sshHost,
+        "sshRemotePort": jobSpec.profileOptions.sshRemotePort,
+        "sshKey": jobSpec.profileOptions.sshKey
       }
     };
     crawlMessages.push(message);
