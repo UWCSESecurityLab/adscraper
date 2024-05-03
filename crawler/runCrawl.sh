@@ -19,40 +19,46 @@ sshHost=$(echo $jobspec | jq -r ".profileOptions.sshHost") || parseError
 sshRemotePort=$(echo $jobspec | jq -r ".profileOptions.sshRemotePort") || parseError
 sshKey=$(echo $jobspec | jq -r ".profileOptions.sshKey") || parseError
 
+# Check if profile directory exists
 if [[ $useExistingProfile = true && ! -d "$profileDir" ]]; then
   echo "Warning: no directory exists at $profileDir, creating directory"
   mkdir -p $profileDir
 fi
 
+# Check if profile directory would be overwritten
 if [[ $writeProfile = true && -d "$newProfileDir" ]]; then
   echo "Error: $newProfileDir already exists, this would be overwritten"
   exit 1
 fi
 
-if [[ -z "$sshHost" && -z "$sshKey" && -z "$sshRemotePort" ]]; then
+# Start SSH tunnel for proxying
+if [[ ! "${sshHost}" = "null" && ! "${sshKey}" = "null" && ! "${sshRemotePort}" = "null" ]]; then
   echo "Starting ssh tunnel"
+  echo $sshHost
+  echo $sshRemotePort
+  echo $sshKey
 
   # Copy ssh keys into container to avoid permissions issues
-  mkdir -p /home/node/.ssh
-  chmod 700 /home/node/.ssh
-  cp $sshKey /home/node/.ssh/id_rsa
-  cp "${sshKey}.pub" /home/node/.ssh/id_rsa.pub
-  chmod 600 /home/node/.ssh/id_rsa
-  chmod 644 /home/node/.ssh/id_rsa.pub
-  chown -R node:node /home/node/.ssh
+  mkdir -p /home/pptruser/.ssh
+  chmod 700 /home/pptruser/.ssh
+  cp $sshKey /home/pptruser/.ssh/id_rsa
+  cp "${sshKey}.pub" /home/pptruser/.ssh/id_rsa.pub
+  chmod 600 /home/pptruser/.ssh/id_rsa
+  chmod 644 /home/pptruser/.ssh/id_rsa.pub
+  chown -R pptruser:pptruser /home/pptruser/.ssh
 
-  ssh -f -N -o StrictHostKeyChecking=no -i /home/node/.ssh/id_rsa -D 5001 -p $sshRemotePort $sshHost || {
+  ssh -f -N -o StrictHostKeyChecking=no -i /home/pptruser/.ssh/id_rsa -D 5001 -p $sshRemotePort $sshHost || {
     echo "SSH tunnel failed to start (Error $?)"
     exit 1
   }
 fi
 
-
+# Copy profile to container
 if [[ $useExistingProfile = true ]];
 then
   echo "Copying profile from ${profileDir} to container"
   # TODO: rsync profile from mounted network drive location to container-local storage
-  rsync -a --no-links ${profileDir}/ /home/node/chrome_profile || {
+  rsync -a --no-links ${profileDir}/ /home/pptruser/chrome_profile || {
     echo "Copying to container via rsync failed (Error $?)"
     exit 1
   }
@@ -63,12 +69,13 @@ echo "Running crawler"
 # Run crawler
 node gen/crawler-amqp.js <<< "$jobspec" || echo "Crawler process failed with exit code $?"
 
+# Write profile back to originating volume
 if [[ $writeProfile = true ]];
 then
   if [[ $newProfileDir = null ]]; then
     echo "Writing profile to temp location (${profileDir}-temp)"
     # rsync updated profile to temp location in mounted network drive
-    rsync -a --no-links /home/node/chrome_profile/ ${profileDir}-temp || {
+    rsync -a --no-links /home/pptruser/chrome_profile/ ${profileDir}-temp || {
       echo "Writing to temp location via rsync failed (Error $?), aborting"
       exit 1
     }
@@ -84,9 +91,10 @@ then
     echo "Writing profile to ${newProfileDir}"
     mkdir -p ${newProfileDir}
     # rsync profile to new profile dir
-    rsync -a --no-links /home/node/chrome_profile/ $newProfileDir || {
+    rsync -a --no-links /home/pptruser/chrome_profile/ $newProfileDir || {
       echo "Writing to new profile location via rsync failed (Error $?), aborting"
       exit 1
     }
   fi
 fi
+echo "Done!"

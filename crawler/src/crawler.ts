@@ -108,6 +108,10 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     fs.accessSync(flags.outputDir, fs.constants.R_OK | fs.constants.W_OK);
   } catch (err) {
     console.error(`${flags.outputDir} is not writable`);
+    console.log('os.userInfo:');
+    console.log(JSON.stringify(os.userInfo()));
+    console.log(`os.stat ${flags.outputDir}:`)
+    console.log(JSON.stringify(fs.statSync(flags.outputDir)));
     process.exit(1);
   }
 
