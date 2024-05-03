@@ -206,7 +206,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       // "urlList": crawlSpec.crawlListFile,
       "profileId": crawlSpec.profileId,
       "chromeOptions": {
-        "profileDir": '/home/node/chrome_profile',
+        "profileDir": '/home/pptruser/chrome_profile',
         "headless": 'new',
         "proxyServer": crawlSpec.proxyServer ? crawlSpec.proxyServer : jobSpec.profileOptions.proxyServer,
       },
