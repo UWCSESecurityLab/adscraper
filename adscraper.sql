@@ -26,8 +26,6 @@ CREATE TABLE crawl (
   profile_dir TEXT,
   crawler_hostname TEXT,
   crawler_ip TEXT
-  -- geolocation TEXT,
-  -- vpn_hostname TEXT,
 );
 
 -- A row in this table is created for every page visited by the crawler.
@@ -77,7 +75,7 @@ CREATE TABLE page (
   referrer_page_url TEXT,
   -- If this is a subpage or ad landing page, and the parent page was scraped,
   -- the id of the parent page.
-  referrer_page INTEGER references page(id)
+  referrer_page INTEGER references page(id),
   -- If this is an ad landing page, the id of the ad that opened this page.
   -- Field is added later, after the ad table is defined.
   -- referrer_ad INTEGER references ad(id)
@@ -165,12 +163,11 @@ CREATE INDEX iframe_ad_id_index ON iframe(parent_ad);
 
 CREATE TABLE request (
   id SERIAL PRIMARY KEY,
-  job_id INTEGER REFERENCES job(id),
-  crawl_id INTEGER REFERENCES crawl(id),
-  parent_page INTEGER REFERENCES page(id),
+  job_id INTEGER,   -- no foreign key constraint to speed up deletes
+  crawl_id INTEGER,
+  parent_page INTEGER,
   timestamp TIMESTAMPTZ,
   initiator TEXT,
   target_url TEXT,
-  resource_type TEXT,
-  sec_fetch_site TEXT
+  resource_type TEXT
 );
