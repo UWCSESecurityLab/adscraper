@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: rabbitmq-configmap
-data:
-  rabbitmq.conf: |
-    consumer_timeout = 86400000

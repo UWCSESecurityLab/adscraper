@@ -21,17 +21,7 @@ spec:
           limits:
             cpu: 100m
         env:
+          # Configure a 2 day timeout on acknowledging completion of
+          # crawl messages, for long crawls
           - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
-            value: "-rabbit consumer_timeout 86400000"
-      #   - name: CONFIG_FILE
-      #     value: /etc/rabbitmq-custom-conf/rabbitmq.conf
-      #   volumeMounts:
-      #     - name: rabbitmq-config
-      #       mountPath: /etc/rabbitmq-custom-conf
-      # volumes:
-      #   - name: rabbitmq-config
-      #     configMap:
-      #       name: rabbitmq-configmap
-      #       items:
-      #         - key: rabbitmq.conf
-      #           path: rabbitmq.conf
+            value: "-rabbit consumer_timeout 172800000"
