@@ -15,6 +15,7 @@ import DbClient, { WebRequest } from './util/db.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
 import { removeCookieBanners } from './pages/cookie-banner-remover.js';
+import { ExitCodes } from './exit-codes.js';
 
 sourceMapSupport.install();
 
@@ -100,7 +101,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   // Validate arguments
   if (!fs.existsSync(flags.outputDir)) {
     console.log(`${flags.outputDir} is not a valid directory`);
-    process.exit(1);
+    process.exit(ExitCodes.INPUT_ERROR);
   }
   // Check if output directory is writeable. If not, check the file permissions
   // (or mount settings, if running in a container).
@@ -112,7 +113,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     console.log(JSON.stringify(os.userInfo()));
     console.log(`os.stat ${flags.outputDir}:`)
     console.log(JSON.stringify(fs.statSync(flags.outputDir)));
-    process.exit(1);
+    process.exit(ExitCodes.NON_RETRYABLE_ERROR);
   }
 
   const db = await DbClient.initialize(pgConf);
@@ -136,7 +137,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     // File containing list of URLs provided
     if (!fs.existsSync(flags.urlList)) {
       console.log(`${flags.urlList} does not exist.`);
-      process.exit(1);
+      process.exit(ExitCodes.INPUT_ERROR);
     }
     crawlList = fs.readFileSync(flags.urlList).toString()
       .trimEnd()
@@ -148,7 +149,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     crawlListFile = flags.adUrlList;
     if (!fs.existsSync(crawlListFile)) {
       console.log(`${crawlListFile} does not exist.`);
-      process.exit(1);
+      process.exit(ExitCodes.INPUT_ERROR);
     }
     await (new Promise<void>((resolve, reject) => {
       fs.createReadStream(crawlListFile)
@@ -169,7 +170,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     isAdUrlCrawl = true;
   } else {
     log.strError('Must provide one of the following crawl inputs: url, urlList, or adUrlList');
-    process.exit(1);
+    process.exit(ExitCodes.INPUT_ERROR);
   }
 
   // Validate crawl list urls
@@ -179,12 +180,12 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       new URL(url);
     } catch (e) {
       log.strError(`Invalid URL in crawl list ${crawlListFile} at line ${i}: ${url}`);
-      process.exit(1);
+      process.exit(ExitCodes.INPUT_ERROR);
     }
   }
 
   // Now that the length of the crawl list is known, set the global timeout
-  const OVERALL_TIMEOUT = crawlList.length * 15 * 60 * 1000;
+  const OVERALL_TIMEOUT = Math.min(2147483647, crawlList.length * 15 * 60 * 1000);
 
   let crawlListStartingIndex = 0;
 
@@ -219,22 +220,24 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       // Check that the crawl list name is the same
       if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
         console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
-        process.exit(1);
+        process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check that the crawl list length is the same
       if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
         console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
-        process.exit(1);
+        process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check if the crawl is already completed
       if (prevCrawl.rows[0].completed) {
         console.log(`Crawl with name ${FLAGS.crawlName} is already completed`);
-        process.exit(1);
+        process.exit(ExitCodes.OK);
       }
 
       // Then assign the crawl id and starting index
       globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
+      await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$2',
+          [os.hostname(), await publicIpv4(), CRAWL_ID]);
     } else {
       // If it doesn't exist, then create a new crawl entry with the given name
       globalThis.CRAWL_ID = await createCrawlEntry();

@@ -7,7 +7,7 @@ jobspec=$(cat)
 
 function parseError() {
   echo "Encountered error parsing jobspec: (Error $?)"
-  exit 1
+  exit 2421
 }
 
 # Parse out profile flags
@@ -28,7 +28,7 @@ fi
 # Check if profile directory would be overwritten
 if [[ $writeProfile = true && -d "$newProfileDir" ]]; then
   echo "Error: $newProfileDir already exists, this would be overwritten"
-  exit 1
+  exit 2421
 fi
 
 # Start SSH tunnel for proxying
@@ -49,7 +49,7 @@ if [[ ! "${sshHost}" = "null" && ! "${sshKey}" = "null" && ! "${sshRemotePort}" 
 
   ssh -f -N -o StrictHostKeyChecking=no -i /home/pptruser/.ssh/id_rsa -D 5001 -p $sshRemotePort $sshHost || {
     echo "SSH tunnel failed to start (Error $?)"
-    exit 1
+    exit 2422
   }
 fi
 
@@ -60,24 +60,31 @@ then
   # TODO: rsync profile from mounted network drive location to container-local storage
   rsync -a --no-links ${profileDir}/ /home/pptruser/chrome_profile || {
     echo "Copying to container via rsync failed (Error $?)"
-    exit 1
+    exit 2424
   }
 fi
 
 echo "Running crawler"
 
 # Run crawler
-node gen/crawler-amqp.js <<< "$jobspec" || echo "Crawler process failed with exit code $?"
+node gen/crawler-amqp.js <<< "$jobspec"
+crawl_exit_code=$?
 
-# Write profile back to originating volume
+if [[ $crawl_exit_code -ne 0 ]]; then
+  echo "Crawler process failed with exit code $crawl_exit_code"
+fi
+
+# Write profile back to originating volume (even if an error occurred, so that
+# progress on crawling can be saved)
 if [[ $writeProfile = true ]];
 then
   if [[ $newProfileDir = null ]]; then
     echo "Writing profile to temp location (${profileDir}-temp)"
     # rsync updated profile to temp location in mounted network drive
     rsync -a --no-links /home/pptruser/chrome_profile/ ${profileDir}-temp || {
-      echo "Writing to temp location via rsync failed (Error $?), aborting"
-      exit 1
+      echo "Writing to temp location via rsync failed (Error $?)"
+      echo "Exiting container with code 2424 (run script error)"
+      exit 2424
     }
 
     echo "Deleting old profile"
@@ -92,9 +99,16 @@ then
     mkdir -p ${newProfileDir}
     # rsync profile to new profile dir
     rsync -a --no-links /home/pptruser/chrome_profile/ $newProfileDir || {
-      echo "Writing to new profile location via rsync failed (Error $?), aborting"
-      exit 1
+      echo "Writing to new profile location via rsync failed (Error $?)"
+      echo "Exiting container with code 2424 (run script error)"
+      exit 2424
     }
   fi
 fi
-echo "Done!"
+
+if [[ $crawl_exit_code -ne 0 ]]; then
+  echo "Container completed with crawl error, terminating with exit code $crawl_exit_code"
+  exit $crawl_exit_code
+else
+  echo "Container completed with no errors"
+fi

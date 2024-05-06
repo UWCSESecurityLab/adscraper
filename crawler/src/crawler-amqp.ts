@@ -4,6 +4,7 @@ import { Validator } from 'jsonschema';
 import path from 'path';
 import * as url from 'url';
 import os from 'os';
+import { ExitCodes } from './exit-codes.js';
 
 console.log(os.userInfo());
 
@@ -15,7 +16,7 @@ process.stdin.once('data', async (data) => {
     await main(flags);
   } catch (e) {
     console.log(e);
-    process.exit(1);
+    process.exit(ExitCodes.INPUT_ERROR);
   }
 });
 
@@ -42,10 +43,10 @@ async function main(flags: crawler.CrawlerFlags) {
       database: process.env.PG_DATABASE
     });
     console.log('Crawl succeeded');
-    process.exit(0);
+    process.exit(ExitCodes.OK);
   } catch (e: any) {
     console.log(e);
     console.log('Crawl failed');
-    process.exit(1);
+    process.exit(ExitCodes.UNCAUGHT_CRAWL_ERROR);
   }
 }
