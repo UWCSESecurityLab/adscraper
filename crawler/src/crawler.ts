@@ -219,18 +219,28 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     if (crawlExists && FLAGS.resumeIfAble) {
       // Check that the crawl list name is the same
       if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
-        console.log(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+        console.log(`Error: Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
         process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check that the crawl list length is the same
       if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
-        console.log(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
+        console.log(`Error: Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
         process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check if the crawl is already completed
       if (prevCrawl.rows[0].completed) {
-        console.log(`Crawl with name ${FLAGS.crawlName} is already completed`);
+        console.log(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
         process.exit(ExitCodes.OK);
+      }
+      // If resuming a profile crawl, check if the profile directory contains
+      // any files. If not, the crawl being resumed from may not have properly
+      // saved the profile after stopping unexpectedly.
+      if (FLAGS.profileOptions
+          && FLAGS.profileOptions.useExistingProfile
+          && FLAGS.chromeOptions.profileDir
+          && fs.readdirSync(FLAGS.chromeOptions.profileDir).length == 0) {
+        console.log('Error: Attempting to resume a profile crawl, but userDataDir is empty');
+        process.exit(ExitCodes.NON_RETRYABLE_ERROR);
       }
 
       // Then assign the crawl id and starting index
