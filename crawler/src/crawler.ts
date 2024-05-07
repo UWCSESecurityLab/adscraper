@@ -22,7 +22,7 @@ sourceMapSupport.install();
 export interface CrawlerFlags {
   jobId?: number,
   crawlId?: number,
-  crawlName?: string,
+  crawlName: string,
   resumeIfAble: boolean,
   profileId?: string,
   outputDir: string,
@@ -100,7 +100,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
 
   // Validate arguments
   if (!fs.existsSync(flags.outputDir)) {
-    console.log(`${flags.outputDir} is not a valid directory`);
+    log.strError(`${flags.outputDir} is not a valid directory`);
     process.exit(ExitCodes.INPUT_ERROR);
   }
   // Check if output directory is writeable. If not, check the file permissions
@@ -108,11 +108,11 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   try {
     fs.accessSync(flags.outputDir, fs.constants.R_OK | fs.constants.W_OK);
   } catch (err) {
-    console.error(`${flags.outputDir} is not writable`);
-    console.log('os.userInfo:');
-    console.log(JSON.stringify(os.userInfo()));
-    console.log(`os.stat ${flags.outputDir}:`)
-    console.log(JSON.stringify(fs.statSync(flags.outputDir)));
+    log.strError(`${flags.outputDir} is not writable`);
+    log.info('os.userInfo:');
+    log.info(JSON.stringify(os.userInfo()));
+    log.info(`os.stat ${flags.outputDir}:`)
+    log.info(JSON.stringify(fs.statSync(flags.outputDir)));
     process.exit(ExitCodes.NON_RETRYABLE_ERROR);
   }
 
@@ -136,7 +136,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   } else if (flags.urlList) {
     // File containing list of URLs provided
     if (!fs.existsSync(flags.urlList)) {
-      console.log(`${flags.urlList} does not exist.`);
+      log.strError(`${flags.urlList} does not exist.`);
       process.exit(ExitCodes.INPUT_ERROR);
     }
     crawlList = fs.readFileSync(flags.urlList).toString()
@@ -148,7 +148,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     // File containing list of ad URLs provided
     crawlListFile = flags.adUrlList;
     if (!fs.existsSync(crawlListFile)) {
-      console.log(`${crawlListFile} does not exist.`);
+      log.strError(`${crawlListFile} does not exist.`);
       process.exit(ExitCodes.INPUT_ERROR);
     }
     await (new Promise<void>((resolve, reject) => {
@@ -219,17 +219,17 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     if (crawlExists && FLAGS.resumeIfAble) {
       // Check that the crawl list name is the same
       if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
-        console.log(`Error: Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+        log.strError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
         process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check that the crawl list length is the same
       if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
-        console.log(`Error: Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
+        log.strError(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
         process.exit(ExitCodes.INPUT_ERROR);
       }
       // Check if the crawl is already completed
       if (prevCrawl.rows[0].completed) {
-        console.log(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
+        log.info(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
         process.exit(ExitCodes.OK);
       }
       // If resuming a profile crawl, check if the profile directory contains
@@ -239,7 +239,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
           && FLAGS.profileOptions.useExistingProfile
           && FLAGS.chromeOptions.profileDir
           && fs.readdirSync(FLAGS.chromeOptions.profileDir).length == 0) {
-        console.log('Error: Attempting to resume a profile crawl, but userDataDir is empty');
+        log.strError('Attempting to resume a profile crawl, but userDataDir is empty');
         process.exit(ExitCodes.NON_RETRYABLE_ERROR);
       }
 
@@ -277,7 +277,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   });
 
   process.on('SIGINT', async () => {
-    console.log('SIGINT received, closing browser...');
+    log.info('SIGINT received, closing browser...');
     await BROWSER.close();
     process.exit();
   });
@@ -599,14 +599,14 @@ async function getPublicIp() {
       return v4;
     }
   } catch (e) {
-    console.log(e);
+    log.error(e as Error);
     try {
       let v6 = await publicIpv6();
       if (v6) {
         return v6;
       }
     } catch (e) {
-      console.log(e);
+      log.error(e as Error);
       return null;
     }
   }

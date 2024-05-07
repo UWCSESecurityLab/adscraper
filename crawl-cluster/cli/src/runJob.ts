@@ -200,7 +200,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
     // the CrawlerFlags interface.
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
-      "crawlName": crawlSpec.crawlName ? crawlSpec.crawlName : undefined,
+      "crawlName": crawlSpec.crawlName,
       "resumeIfAble": true,
       "outputDir": jobSpec.dataDir,
       // "urlList": crawlSpec.crawlListFile,
@@ -254,6 +254,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
     }
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
+      "crawlName": `${jobSpec.jobName}_url_${i}`,
       "outputDir": jobSpec.dataDir,
       "resumeIfAble": false,
       "url": url,
@@ -305,6 +306,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
   for (let i = 0; i < urls.length; i++) {
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
+      "crawlName": `landing_page_for_ad_${adIds[i]}`,
       "outputDir": jobSpec.dataDir,
       "resumeIfAble": false,
       "url": urls[i],

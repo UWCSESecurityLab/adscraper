@@ -2,6 +2,7 @@ import chalk, { ChalkInstance } from 'chalk';
 import fs from 'fs';
 import dayjs from 'dayjs';
 import path from 'path';
+import os from 'os';
 
 // Declared here, set when writeLog is called for the first time
 // (after global vars are initialized)
@@ -15,87 +16,98 @@ export enum LogLevel {
   VERBOSE = 5
 }
 
+interface Log {
+  ts: string;
+  level: string;
+  message: string;
+  stack?: string;
+}
+
 export function error(e: Error, url?: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'ERROR',
     message: `${url? url + ': ': url}${e.message}`,
     stack: e.stack
   }
   if (LOG_LEVEL >= LogLevel.ERROR) {
-    printLog(jsonLog, chalk.red);
+    printLog(log, chalk.red);
   }
-  writeLog(jsonLog);
+  writeLog(log);
 }
 
 export function strError(message: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'ERROR',
     message: message
   }
   if (LOG_LEVEL >= LogLevel.ERROR) {
-    printLog(jsonLog, chalk.red);
+    printLog(log, chalk.red);
   }
-  writeLog(jsonLog);
+  writeLog(log);
 }
 
 export function warning(message: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'WARNING',
     message: message
   }
   if (LOG_LEVEL >= LogLevel.WARNING) {
-    printLog(jsonLog, chalk.yellow);
+    printLog(log, chalk.yellow);
   }
-  writeLog(jsonLog);
+  writeLog(log);
 }
 
 export function info(message: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'INFO',
     message: message
   }
   if (LOG_LEVEL >= LogLevel.INFO) {
-    printLog(jsonLog, chalk.whiteBright);
+    printLog(log, chalk.whiteBright);
   }
-  writeLog(jsonLog);
+  writeLog(log);
 }
 
 export function debug(message: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'DEBUG',
     message: message
   }
   if (LOG_LEVEL >= LogLevel.DEBUG) {
-    printLog(jsonLog, chalk.whiteBright.dim);
-    writeLog(jsonLog);
+    printLog(log, chalk.whiteBright.dim);
+    writeLog(log);
   }
 }
 
 export function verbose(message: string) {
-  let jsonLog = {
+  let log = {
     ts: dayjs().format(),
     level: 'VERBOSE',
     message: message
   }
   if (LOG_LEVEL >= LogLevel.VERBOSE) {
-    printLog(jsonLog, chalk.white.dim);
-    writeLog(jsonLog);
+    printLog(log, chalk.white.dim);
+    writeLog(log);
   }
 }
 
-function writeLog(l: { ts: string, level: string, message: string, stack?: string }) {
+function writeLog(l: Log) {
   if (!logPath) {
-    let logDir = path.resolve(FLAGS.outputDir, 'logs');
+    let logDirSegments = [FLAGS.outputDir, 'logs']
+    if (FLAGS.jobId) {
+      logDirSegments.push(`job${FLAGS.jobId.toString()}`);
+    }
+    let logDir = path.resolve(...logDirSegments);
     if (!fs.existsSync(logDir)) {
       fs.mkdirSync(logDir, { recursive: true });
     }
-    let dateStr = dayjs().format();
-    logPath = path.resolve(logDir, `crawl_${dateStr}_${FLAGS.crawlName}.txt`);
+
+    logPath = path.resolve(logDir, `${FLAGS.crawlName}.txt`);
   }
 
   const log = formatLog(l);
@@ -106,10 +118,10 @@ function writeLog(l: { ts: string, level: string, message: string, stack?: strin
   });
 }
 
-function formatLog(l: { ts: string, level: string, message: string, stack?: string }) {
+function formatLog(l: Log) {
   return `[${l.level} ${l.ts}] ${l.message}${l.stack ? '\n' + l.stack : ''}`;
 }
 
-function printLog(l: { ts: string, level: string, message: string, stack?: string }, color: ChalkInstance) {
+function printLog(l: Log, color: ChalkInstance) {
   console.log(color(formatLog(l)));
 }

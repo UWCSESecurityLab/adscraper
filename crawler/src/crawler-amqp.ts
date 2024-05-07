@@ -5,6 +5,7 @@ import path from 'path';
 import * as url from 'url';
 import os from 'os';
 import { ExitCodes } from './exit-codes.js';
+import * as log from './util/log.js';
 
 console.log(os.userInfo());
 
@@ -13,6 +14,7 @@ const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 process.stdin.once('data', async (data) => {
   try {
     const flags = validateCrawlSpec(JSON.parse(data.toString()));
+    globalThis.FLAGS = flags;
     await main(flags);
   } catch (e) {
     console.log(e);
@@ -42,11 +44,11 @@ async function main(flags: crawler.CrawlerFlags) {
       password: process.env.PG_PASSWORD,
       database: process.env.PG_DATABASE
     });
-    console.log('Crawl succeeded');
+    log.info('Crawl succeeded');
     process.exit(ExitCodes.OK);
   } catch (e: any) {
-    console.log(e);
-    console.log('Crawl failed');
+    log.strError(e);
+    log.strError('Crawl failed');
     process.exit(ExitCodes.UNCAUGHT_CRAWL_ERROR);
   }
 }
