@@ -246,7 +246,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       // Then assign the crawl id and starting index
       globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
-      await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$2',
+      await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$3',
           [os.hostname(), await publicIpv4(), CRAWL_ID]);
     } else {
       // If it doesn't exist, then create a new crawl entry with the given name

@@ -5,14 +5,14 @@ export enum ExitCodes {
   // Crawl input validation errors, like missing fields or mismatched
   // crawl lists when resuming previous crawls. Cannot be restarted without
   //  fixing the inputs.
-  INPUT_ERROR = 2421,
+  INPUT_ERROR = 242,
   // Other errors that require manual intervention before restarting, like
   // file permission issues.
-  NON_RETRYABLE_ERROR = 2422,
+  NON_RETRYABLE_ERROR = 243,
   // Unexpected errors that occurred during the crawl. In many cases, like
   // timeouts or network errors, the crawl can be restarted.
-  UNCAUGHT_CRAWL_ERROR = 2423,
+  UNCAUGHT_CRAWL_ERROR = 244,
   // Unused in node, but this code is thrown by runCrawl.sh if an error
   // is encountered in other commands (e.g. rsync failures)
-  RUN_SCRIPT_ERROR = 2424,
+  RUN_SCRIPT_ERROR = 245,
 }
