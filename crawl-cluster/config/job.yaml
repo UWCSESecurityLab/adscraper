@@ -54,9 +54,6 @@ spec:
       nodeSelector:
         crawler: "true"
       securityContext:
-        runAsUser: 1000
-        runAsGroup: 1000
-        fsGroupChangePolicy: "OnRootMismatch"
         capabilities:
             add:
             - SYS_ADMIN
