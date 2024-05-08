@@ -243,6 +243,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         process.exit(ExitCodes.NON_RETRYABLE_ERROR);
       }
 
+      log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) at index ${prevCrawl.rows[0].crawl_list_current_index} of ${prevCrawl.rows[0].crawl_list_length}`);
+
       // Then assign the crawl id and starting index
       globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
@@ -251,10 +253,12 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     } else {
       // If it doesn't exist, then create a new crawl entry with the given name
       globalThis.CRAWL_ID = await createCrawlEntry();
+      log.info(`Created new crawl record for ${FLAGS.crawlName} with id ${CRAWL_ID}`);
     }
   } else {
     // If no crawl name is passed, then create a new crawl entry
     globalThis.CRAWL_ID = await createCrawlEntry();
+    log.info(`Created new crawl record for ${FLAGS.crawlName} with id ${CRAWL_ID}`);
   }
 
   // Open browser

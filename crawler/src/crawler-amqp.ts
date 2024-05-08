@@ -47,7 +47,11 @@ async function main(flags: crawler.CrawlerFlags) {
     log.info('Crawl succeeded');
     process.exit(ExitCodes.OK);
   } catch (e: any) {
-    log.strError(e);
+    if (e instanceof Error) {
+      log.error(e);
+    } else {
+      log.strError(e);
+    }
     log.strError('Crawl failed');
     process.exit(ExitCodes.UNCAUGHT_CRAWL_ERROR);
   }

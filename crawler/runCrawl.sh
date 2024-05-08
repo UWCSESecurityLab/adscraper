@@ -2,8 +2,8 @@
 
 # set -e
 
-# Read jobSpec from stdin (passed from amqp)
-crawlSpec=$(cat)
+# Read crawl message from stdin (passed from amqp)
+crawlspec=$(cat)
 
 function parseError() {
   echo "Encountered error parsing crawlspec: (Error $?)" | tee -a $logFile
