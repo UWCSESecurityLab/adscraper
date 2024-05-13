@@ -2,20 +2,20 @@ import csvParser from 'csv-parser';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { ClientConfig, QueryResult } from 'pg';
+import { ClientConfig } from 'pg';
 import { publicIpv4, publicIpv6 } from 'public-ip';
 import { Browser, HTTPRequest, Page } from 'puppeteer';
 import puppeteerExtra from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import sourceMapSupport from 'source-map-support';
 import { scrapeAdsOnPage } from './ads/ad-scraper.js';
+import { removeCookieBanners } from './pages/cookie-banner-remover.js';
 import SubpageExplorer from './pages/find-page.js';
 import { PageType, scrapePage } from './pages/page-scraper.js';
 import DbClient, { WebRequest } from './util/db.js';
+import { InputError, NonRetryableError } from './util/errors.js';
 import * as log from './util/log.js';
 import { createAsyncTimeout, sleep } from './util/timeout.js';
-import { removeCookieBanners } from './pages/cookie-banner-remover.js';
-import { ExitCodes } from './exit-codes.js';
 
 sourceMapSupport.install();
 
@@ -91,6 +91,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
   // Size of the viewport
   globalThis.VIEWPORT = { width: 1366, height: 768 };
   globalThis.LOG_LEVEL = crawlerFlags.logLevel ? crawlerFlags.logLevel : log.LogLevel.INFO;
+  log.setLogDirFromFlags(crawlerFlags);
 }
 
 export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
@@ -100,20 +101,20 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
 
   // Validate arguments
   if (!fs.existsSync(flags.outputDir)) {
-    log.strError(`${flags.outputDir} is not a valid directory`);
-    process.exit(ExitCodes.INPUT_ERROR);
+    log.strError(`Output dir ${flags.outputDir} is not a valid directory`);
+    throw new InputError(`Output dir ${flags.outputDir} is not a valid directory`);
   }
   // Check if output directory is writeable. If not, check the file permissions
   // (or mount settings, if running in a container).
   try {
     fs.accessSync(flags.outputDir, fs.constants.R_OK | fs.constants.W_OK);
   } catch (err) {
-    log.strError(`${flags.outputDir} is not writable`);
+    log.strError(`Output dir ${flags.outputDir} is not writable`);
     log.info('os.userInfo:');
     log.info(JSON.stringify(os.userInfo()));
     log.info(`os.stat ${flags.outputDir}:`)
     log.info(JSON.stringify(fs.statSync(flags.outputDir)));
-    process.exit(ExitCodes.NON_RETRYABLE_ERROR);
+    throw new NonRetryableError(`Output dir ${flags.outputDir} is not writable`);
   }
 
   const db = await DbClient.initialize(pgConf);
@@ -137,7 +138,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     // File containing list of URLs provided
     if (!fs.existsSync(flags.urlList)) {
       log.strError(`${flags.urlList} does not exist.`);
-      process.exit(ExitCodes.INPUT_ERROR);
+      throw new InputError(`${flags.urlList} does not exist.`);
     }
     crawlList = fs.readFileSync(flags.urlList).toString()
       .trimEnd()
@@ -149,28 +150,33 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     crawlListFile = flags.adUrlList;
     if (!fs.existsSync(crawlListFile)) {
       log.strError(`${crawlListFile} does not exist.`);
-      process.exit(ExitCodes.INPUT_ERROR);
+      throw new InputError(`${crawlListFile} does not exist.`);
     }
-    await (new Promise<void>((resolve, reject) => {
-      fs.createReadStream(crawlListFile)
-        .pipe(csvParser())
-        .on('data', data => {
-          if (!data.ad_id) {
-            reject(new Error('ad_id column missing from adUrlList'));
-          }
-          if (!data.url) {
-            reject(new Error('url column missing from adUrlList'));
-          }
-          crawlList.push(data.url);
-          crawlListAdIds.push(Number.parseInt(data.ad_id));
-        }).on('end', () => {
-          resolve();
-        });
-    }));
+    try {
+      await (new Promise<void>((resolve, reject) => {
+        fs.createReadStream(crawlListFile)
+          .pipe(csvParser())
+          .on('data', data => {
+            if (!data.ad_id) {
+              reject(new Error('ad_id column missing from adUrlList'));
+            }
+            if (!data.url) {
+              reject(new Error('url column missing from adUrlList'));
+            }
+            crawlList.push(data.url);
+            crawlListAdIds.push(Number.parseInt(data.ad_id));
+          }).on('end', () => {
+            resolve();
+          });
+      }));
+    } catch (e: any) {
+      log.strError(e.message);
+      throw new InputError(e.message);
+    }
     isAdUrlCrawl = true;
   } else {
     log.strError('Must provide one of the following crawl inputs: url, urlList, or adUrlList');
-    process.exit(ExitCodes.INPUT_ERROR);
+    throw new InputError('Must provide one of the following crawl inputs: url, urlList, or adUrlList');
   }
 
   // Validate crawl list urls
@@ -180,7 +186,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       new URL(url);
     } catch (e) {
       log.strError(`Invalid URL in crawl list ${crawlListFile} at line ${i}: ${url}`);
-      process.exit(ExitCodes.INPUT_ERROR);
+      throw new InputError(`Invalid URL in crawl list ${crawlListFile} at line ${i}: ${url}`);
     }
   }
 
@@ -220,27 +226,17 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       // Check that the crawl list name is the same
       if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
         log.strError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
-        process.exit(ExitCodes.INPUT_ERROR);
+        throw new InputError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
       }
       // Check that the crawl list length is the same
       if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
         log.strError(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
-        process.exit(ExitCodes.INPUT_ERROR);
+        throw new InputError(`Crawl list file provided does not the have same number of URLs as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list_length}, actual: ${crawlList.length}`);
       }
       // Check if the crawl is already completed
       if (prevCrawl.rows[0].completed) {
         log.info(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
-        process.exit(ExitCodes.OK);
-      }
-      // If resuming a profile crawl, check if the profile directory contains
-      // any files. If not, the crawl being resumed from may not have properly
-      // saved the profile after stopping unexpectedly.
-      if (FLAGS.profileOptions
-          && FLAGS.profileOptions.useExistingProfile
-          && FLAGS.chromeOptions.profileDir
-          && fs.readdirSync(FLAGS.chromeOptions.profileDir).length == 0) {
-        log.strError('Attempting to resume a profile crawl, but userDataDir is empty');
-        process.exit(ExitCodes.NON_RETRYABLE_ERROR);
+        return;
       }
 
       log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) at index ${prevCrawl.rows[0].crawl_list_current_index} of ${prevCrawl.rows[0].crawl_list_length}`);
@@ -283,135 +279,129 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   process.on('SIGINT', async () => {
     log.info('SIGINT received, closing browser...');
     await BROWSER.close();
-    process.exit();
   });
 
   const version = await BROWSER.version();
   log.info('Running ' + version);
 
-  try {
-    // Main loop through crawl list
-    for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
-      const url = crawlList[i];
+  // Main loop through crawl list
+  for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
+    const url = crawlList[i];
 
-      let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
+    let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
-      // Set overall timeout for this crawl list item
-      let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
-        `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
+    // Set overall timeout for this crawl list item
+    let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
+      `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
 
-      let seedPage = await BROWSER.newPage();
+    let seedPage = await BROWSER.newPage();
 
-      try {
-        let _crawl = (async () => {
-          // Insert record for this crawl list item
-          try {
-            // Open the URL and scrape it (if specified)
-            let pageId;
+    try {
+      let _crawl = (async () => {
+        // Insert record for this crawl list item
+        try {
+          // Open the URL and scrape it (if specified)
+          let pageId;
+          if (isAdUrlCrawl) {
+            pageId = await loadAndHandlePage(url, seedPage, {
+              pageType: PageType.LANDING,
+              referrerAd: prevAdId,
+              reload: 0
+            });
+          } else {
+            pageId = await loadAndHandlePage(url, seedPage, {
+              pageType: PageType.MAIN,
+              reload: 0
+            });
+          }
+
+          if (FLAGS.crawlOptions.refreshPage) {
+            await seedPage.close();
+            seedPage = await BROWSER.newPage();
             if (isAdUrlCrawl) {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.LANDING,
                 referrerAd: prevAdId,
-                reload: 0
-              });
+                reload: 1 });
             } else {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.MAIN,
-                reload: 0
+                reload: 1
               });
             }
+          }
 
-            if (FLAGS.crawlOptions.refreshPage) {
-              await seedPage.close();
-              seedPage = await BROWSER.newPage();
-              if (isAdUrlCrawl) {
-                pageId = await loadAndHandlePage(url, seedPage, {
-                  pageType: PageType.LANDING,
-                  referrerAd: prevAdId,
-                  reload: 1 });
-              } else {
-                pageId = await loadAndHandlePage(url, seedPage, {
-                  pageType: PageType.MAIN,
-                  reload: 1
-                });
-              }
-            }
+          let subpageExplorer = new SubpageExplorer();
 
-            let subpageExplorer = new SubpageExplorer();
-
-            // Open additional pages (if specified) and scrape them (if specified)
-            if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
-              const articleUrl = await subpageExplorer.findArticle(seedPage);
-              if (articleUrl) {
-                let articlePage = await BROWSER.newPage();
+          // Open additional pages (if specified) and scrape them (if specified)
+          if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
+            const articleUrl = await subpageExplorer.findArticle(seedPage);
+            if (articleUrl) {
+              let articlePage = await BROWSER.newPage();
+              await loadAndHandlePage(articleUrl, articlePage, {
+                pageType: PageType.SUBPAGE,
+                referrerPageId: pageId,
+                referrerPageUrl: seedPage.url(),
+                reload: 0
+              });
+              await articlePage.close();
+              if (FLAGS.crawlOptions.refreshPage) {
+                articlePage = await BROWSER.newPage();
                 await loadAndHandlePage(articleUrl, articlePage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 0
+                  reload: 1
                 });
                 await articlePage.close();
-                if (FLAGS.crawlOptions.refreshPage) {
-                  articlePage = await BROWSER.newPage();
-                  await loadAndHandlePage(articleUrl, articlePage, {
-                    pageType: PageType.SUBPAGE,
-                    referrerPageId: pageId,
-                    referrerPageUrl: seedPage.url(),
-                    reload: 1
-                  });
-                  await articlePage.close();
-                }
-              } else {
-                log.strError(`${url}: Couldn't find article`);
               }
+            } else {
+              log.strError(`${url}: Couldn't find article`);
             }
+          }
 
-            for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
-              const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
-              if (urlWithAds) {
-                let adsPage = await BROWSER.newPage();
+          for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
+            const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
+            if (urlWithAds) {
+              let adsPage = await BROWSER.newPage();
+              await loadAndHandlePage(urlWithAds, adsPage, {
+                pageType: PageType.SUBPAGE,
+                referrerPageId: pageId,
+                referrerPageUrl: seedPage.url(),
+                reload: 0
+              });
+              await adsPage.close();
+              if (FLAGS.crawlOptions.refreshPage) {
+                adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 0
+                  reload: 1
                 });
                 await adsPage.close();
-                if (FLAGS.crawlOptions.refreshPage) {
-                  adsPage = await BROWSER.newPage();
-                  await loadAndHandlePage(urlWithAds, adsPage, {
-                    pageType: PageType.SUBPAGE,
-                    referrerPageId: pageId,
-                    referrerPageUrl: seedPage.url(),
-                    reload: 1
-                  });
-                  await adsPage.close();
-                }
-              } else {
-                log.strError(`${url}: Couldn't find page with ads`);
-                break;
               }
+            } else {
+              log.strError(`${url}: Couldn't find page with ads`);
+              break;
             }
-          } catch (e: any) {
-            log.error(e, seedPage.url());
-          } finally {
-            clearTimeout(urlTimeoutId);
           }
-        })();
-        await Promise.race([_crawl, urlTimeout]);
-      } catch (e: any) {
-        log.error(e, seedPage.url());
-      } finally {
-        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
-        seedPage.close();
-      }
+        } catch (e: any) {
+          log.error(e, seedPage.url());
+        } finally {
+          clearTimeout(urlTimeoutId);
+        }
+      })();
+      await Promise.race([_crawl, urlTimeout]);
+    } catch (e: any) {
+      log.error(e, seedPage.url());
+    } finally {
+      await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
+      seedPage.close();
     }
-    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
-    // await BROWSER.close();
-  } catch (e) {
-    // await BROWSER.close();
-    throw e;
   }
+  await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
+  return;
 }
 
 /**

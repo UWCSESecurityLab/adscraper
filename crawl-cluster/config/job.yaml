@@ -53,11 +53,22 @@ spec:
               value: /home/pptruser/.cache/puppeteer
       nodeSelector:
         crawler: "true"
+      restartPolicy: OnFailure
       securityContext:
         capabilities:
             add:
             - SYS_ADMIN
-      restartPolicy: OnFailure
       # Set up your storage mount here
       # volumes:
       #   - name: adscraper-storage
+  backoffLimit: 100
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onExitCodes:
+        operator: In
+        values: [244]
+    - action: FailJob
+      onExitCodes:
+        operator: In
+        values: [242, 243, 245]

@@ -125,7 +125,7 @@ async function main() {
 
       // Fill message queue with crawl configs
       console.log(`Writing crawl messages to queue ${QUEUE}`);
-      await amqpChannel.assertQueue(QUEUE);
+      await amqpChannel.assertQueue(QUEUE, { maxPriority: 2 });
       await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
     } else {
       // Find previous job in the database
@@ -337,7 +337,7 @@ function writeToAmqpQueue(messages: CrawlerFlagsWithProfileHandling[], channel: 
       let ok = true;
       do {
         let message = messages.shift();
-        ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)));
+        ok = channel.sendToQueue(queue, Buffer.from(JSON.stringify(message)), { priority: 1 });
         await sleep(1);
         pbar.increment();
       } while (ok && messages.length > 0);

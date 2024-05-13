@@ -16,3 +16,24 @@ export enum ExitCodes {
   // is encountered in other commands (e.g. rsync failures)
   RUN_SCRIPT_ERROR = 245,
 }
+
+export class InputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'INPUT_ERROR';
+  }
+}
+
+export class NonRetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NON_RETRYABLE_ERROR';
+  }
+}
+
+export class UncaughtCrawlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UNCAUGHT_CRAWL_ERROR';
+  }
+}

@@ -3,10 +3,7 @@ import fs from 'fs';
 import dayjs from 'dayjs';
 import path from 'path';
 import os from 'os';
-
-// Declared here, set when writeLog is called for the first time
-// (after global vars are initialized)
-let logPath: string;
+import { CrawlerFlags } from '../crawler.js';
 
 export enum LogLevel {
   ERROR = 1,
@@ -21,6 +18,25 @@ interface Log {
   level: string;
   message: string;
   stack?: string;
+}
+
+declare global {
+  var LOG_FILE: string;
+}
+
+// Call to set where log files should be stored - directory structure and
+// name are based on the job id and crawl name. If not called, no logs will
+// be written to file.
+export function setLogDirFromFlags(crawlerFlags: CrawlerFlags) {
+  let logDirSegments = [crawlerFlags.outputDir, 'logs'];
+  if (crawlerFlags.jobId) {
+    logDirSegments.push(`job${crawlerFlags.jobId.toString()}`);
+  }
+  let logDir = path.resolve(...logDirSegments);
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+  globalThis.LOG_FILE = path.resolve(logDir, `${crawlerFlags.crawlName}.txt`);
 }
 
 export function error(e: Error, url?: string) {
@@ -97,21 +113,8 @@ export function verbose(message: string) {
 }
 
 function writeLog(l: Log) {
-  if (!logPath) {
-    let logDirSegments = [FLAGS.outputDir, 'logs']
-    if (FLAGS.jobId) {
-      logDirSegments.push(`job${FLAGS.jobId.toString()}`);
-    }
-    let logDir = path.resolve(...logDirSegments);
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    logPath = path.resolve(logDir, `${FLAGS.crawlName}.txt`);
-  }
-
   const log = formatLog(l);
-  fs.writeFile(logPath, log + '\n', { flag: 'a' }, (err) => {
+  fs.writeFile(LOG_FILE, log + '\n', { flag: 'a' }, (err) => {
     if (err) {
       console.log(err);
     }
