@@ -27,9 +27,9 @@ spec:
           env:
             - name: BROKER_URL
               value: amqp://guest:guest@rabbitmq-service:5672
-            # The queue will be set automatically by runJob.ts
-            # - name: QUEUE
-            #   value: job1  # name of job
+            # The job id will be set automatically by runJob.ts
+            # - name: JOB_ID
+            #   value: 123
             - name: PG_DATABASE
               valueFrom:
                 secretKeyRef:

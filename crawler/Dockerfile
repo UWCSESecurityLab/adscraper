@@ -11,4 +11,4 @@ COPY --chown=pptruser:pptruser . .
 RUN npx tsc \
     && npx typescript-json-schema ./tsconfig.json CrawlerFlags > ./gen/crawlerFlagsSchema.json
 
-CMD /usr/bin/amqp-consume --url=$BROKER_URL -q $QUEUE -c 1 ./runCrawl.sh
+CMD node gen/crawler-amqp.js -j $JOB_ID -a $BROKER_URL

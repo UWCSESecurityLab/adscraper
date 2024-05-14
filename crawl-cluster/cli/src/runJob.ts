@@ -171,7 +171,7 @@ async function generateK8sJob(options: {parallelism: number, completions: number
   job.spec!.completions = options.completions;
   job.metadata!.name = `${options.jobName.toLowerCase()}`;
   job.spec!.template.metadata!.name = `${options.jobName.toLowerCase()}`;
-  job.spec!.template!.spec!.containers![0].env!.push({name: 'QUEUE', value: `job${options.jobId}`});
+  job.spec!.template!.spec!.containers![0].env!.push({name: 'JOB_ID', value: options.jobId.toString()});
   return job;
 }
 
