@@ -125,7 +125,7 @@ async function main() {
 
       // Fill message queue with crawl configs
       console.log(`Writing crawl messages to queue ${QUEUE}`);
-      await amqpChannel.assertQueue(QUEUE, { maxPriority: 2 });
+      await amqpChannel.assertQueue(QUEUE, { maxPriority: 3 });
       await writeToAmqpQueue(crawlMessages, amqpChannel, QUEUE);
     } else {
       // Find previous job in the database
@@ -138,7 +138,7 @@ async function main() {
       const QUEUE = `job${jobId}`;
 
       // Check if the message queue for this job exists and has unprocessed messages
-      let assertQueueRes = await amqpChannel.assertQueue(QUEUE);
+      let assertQueueRes = await amqpChannel.assertQueue(QUEUE, { maxPriority: 3 });
       if (assertQueueRes.messageCount == 0) {
         console.log(`Error: cannot resume, no remaining messages in queue "${QUEUE}".`);
         process.exit(1);

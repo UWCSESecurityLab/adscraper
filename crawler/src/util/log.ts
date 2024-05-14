@@ -2,7 +2,6 @@ import chalk, { ChalkInstance } from 'chalk';
 import fs from 'fs';
 import dayjs from 'dayjs';
 import path from 'path';
-import os from 'os';
 import { CrawlerFlags } from '../crawler.js';
 
 export enum LogLevel {
@@ -22,7 +21,11 @@ interface Log {
 
 declare global {
   var LOG_FILE: string;
+  var LOG_LEVEL: LogLevel;
 }
+
+globalThis.LOG_FILE = '';
+globalThis.LOG_LEVEL = LogLevel.INFO;
 
 // Call to set where log files should be stored - directory structure and
 // name are based on the job id and crawl name. If not called, no logs will
@@ -37,13 +40,14 @@ export function setLogDirFromFlags(crawlerFlags: CrawlerFlags) {
     fs.mkdirSync(logDir, { recursive: true });
   }
   globalThis.LOG_FILE = path.resolve(logDir, `${crawlerFlags.crawlName}.txt`);
+  globalThis.LOG_LEVEL = crawlerFlags.logLevel ? crawlerFlags.logLevel : LogLevel.INFO;
 }
 
 export function error(e: Error, url?: string) {
   let log = {
     ts: dayjs().format(),
     level: 'ERROR',
-    message: `${url? url + ': ': url}${e.message}`,
+    message: `${url? url + ': ': ''}${e.message}`,
     stack: e.stack
   }
   if (LOG_LEVEL >= LogLevel.ERROR) {
@@ -114,11 +118,13 @@ export function verbose(message: string) {
 
 function writeLog(l: Log) {
   const log = formatLog(l);
-  fs.writeFile(LOG_FILE, log + '\n', { flag: 'a' }, (err) => {
-    if (err) {
-      console.log(err);
-    }
-  });
+  if (LOG_FILE.length > 0) {
+    fs.writeFile(LOG_FILE, log + '\n', { flag: 'a' }, (err) => {
+      if (err) {
+        console.log(err);
+      }
+    });
+  }
 }
 
 function formatLog(l: Log) {

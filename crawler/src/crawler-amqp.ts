@@ -72,7 +72,7 @@ async function main() {
   try {
     // Verify that there is a job ID so we know which queue to consume from
     if (!options.job_id) {
-      console.log('Invalid job id: ' + options.job_id)
+      log.strError('Invalid job id: ' + options.job_id)
       process.exit(ExitCodes.INPUT_ERROR);
     }
 
@@ -82,21 +82,25 @@ async function main() {
     const QUEUE = `job${options.job_id}`;
 
     // Poll the queue for a message
-    let data = await amqpChannel.get(QUEUE);
+    log.info('Polling message queue for crawl parameters');
+    let message = await amqpChannel.get(QUEUE);
     let i = 0;
-    do {
+    while (message == false && i < 12) {
       i++;
       await sleep(5000);
-      data = await amqpChannel.get(QUEUE);
-    } while (!data && i < 24);
-    if (!data) {
-      console.log('No messages in queue after 120s, exiting');
-      process.exit(ExitCodes.NON_RETRYABLE_ERROR);
+      message = await amqpChannel.get(QUEUE);
     }
-    amqpChannel.ack(data);
+    if (!message) {
+      log.warning('No messages in queue after 60s, exiting');
+      process.exit(ExitCodes.OK);
+    }
+    log.info('Received message from queue');
+    amqpChannel.ack(message);
+
+    let data = message.content.toString();
 
     // Parse the crawl message, set up logger
-    let flags = validateCrawlSpec(JSON.parse(data.toString()));
+    let flags = validateCrawlSpec(JSON.parse(data));
     log.setLogDirFromFlags(flags);
 
     // Set up database connection
@@ -111,11 +115,11 @@ async function main() {
 
     // Early exit if crawl is already complete
     if (flags.resumeIfAble && flags.crawlName) {
-      const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE name=$1', [FLAGS.crawlName]);
+      const prevCrawl = await db.postgres.query('SELECT * FROM crawl WHERE name=$1', [flags.crawlName]);
       let crawlExists = prevCrawl.rowCount && prevCrawl.rowCount > 0;
       if (crawlExists) {
         if (prevCrawl.rows[0].completed) {
-          log.info(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
+          log.info(`Crawl with name ${flags.crawlName} is already completed, exiting`);
           process.exit(ExitCodes.OK);
         }
       }
@@ -136,8 +140,15 @@ async function main() {
 
     if (flags.profileOptions.sshHost && flags.profileOptions.sshRemotePort && flags.profileOptions.sshRemotePort) {
       log.info('Setting up SSH tunnel');
+      fs.mkdirSync('/home/pptruser/.ssh', { recursive: true });
+      fs.chmodSync('/home/pptruser/.ssh', 0o700);
       fs.copyFileSync(flags.profileOptions.sshKey, '/home/pptruser/.ssh/id_rsa');
       fs.copyFileSync(`${flags.profileOptions.sshKey}.pub`, '/home/pptruser/.ssh/id_rsa.pub');
+      fs.chmodSync('/home/pptruser/.ssh/id_rsa', 0o600);
+      fs.chmodSync('/home/pptruser/.ssh/id_rsa.pub', 0o644);
+      fs.chownSync('/home/pptruser/.ssh', 999, 999);
+      fs.chownSync('/home/pptruser/.ssh/id_rsa', 999, 999);
+      fs.chownSync('/home/pptruser/.ssh/id_rsa.pub', 999, 999);
       try {
         let execResult = await execPromise(`ssh -f -N -o StrictHostKeyChecking=no -i /home/pptruser/.ssh/id_rsa -D 5001 -p ${flags.profileOptions.sshRemotePort} ${flags.profileOptions.sshHost}`);
         if (execResult.stderr) {
@@ -160,7 +171,7 @@ async function main() {
     try {
       log.info('Running crawler...')
       await crawler.crawl(flags, pgConf);
-      log.info('Crawl succeeded!');
+      log.info('Crawl succeeded');
       crawlSuccess = true;
     } catch (e: any) {
       log.strError('Crawl failed due to exception:');
@@ -187,16 +198,35 @@ async function main() {
     // may indicate a permissions issue or other issue that makes it unsafe
     // to restart the crawl.
     if (flags.profileOptions.writeProfile && !(error instanceof NonRetryableError)) {
+      // Filter for fs.cpSync. Ignores the Chrome profile singletons files
+      // (which are symlinks), other symlinks, or files that disappear
+      // since the command was invoked.
+      let filterInvalidFiles = (src: string, dst: string) => {
+        if (src == 'SingletonCookie' || src == 'SingletonLock' || src == 'SingletonSocket') {
+          return false;
+        }
+        if (!fs.existsSync(src)) {
+          return false;
+        }
+        return !fs.lstatSync(src).isSymbolicLink();
+      }
+
       if (!flags.profileOptions.newProfileDir) {
         log.info(`Writing profile to temp location (${flags.profileOptions.profileDir}-temp)`);
-        fs.cpSync('/home/pptruser/chrome_profile', `${flags.profileOptions.profileDir}-temp`, { recursive: true });
+        fs.cpSync('/home/pptruser/chrome_profile', `${flags.profileOptions.profileDir}-temp`, {
+          recursive: true,
+          filter: filterInvalidFiles
+        });
         log.info('Deleting old profile');
         fs.rmSync(flags.profileOptions.profileDir, { recursive: true });
         log.info(`Moving temp profile to original location (${flags.profileOptions.profileDir})`);
         fs.renameSync(`${flags.profileOptions.profileDir}-temp`, flags.profileOptions.profileDir);
       } else {
         log.info(`Writing profile to new location (${flags.profileOptions.newProfileDir})`);
-        fs.cpSync('/home/pptruser/chrome_profile', flags.profileOptions.newProfileDir, { recursive: true });
+        fs.cpSync('/home/pptruser/chrome_profile', flags.profileOptions.newProfileDir, {
+          recursive: true,
+          filter: filterInvalidFiles
+        });
       }
     }
 
@@ -213,11 +243,22 @@ async function main() {
         // like the pod running out of memory, a misbehaving site crashing the
         // browser, or the DevTools protocol connection breaking. In these
         // cases it should be safe to restart the crawl.
-
+        log.info('Handling uncaught crawler error - requeuing crawl message...');
         // To restart, send the initial crawl message back to the queue with a
         // higher priority so it is consumed first.
-        amqpChannel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(flags)), { priority: 2 });
-
+        await new Promise<void>((resolve, reject) => {
+          let send = () => {
+            let ok = amqpChannel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(flags)), { priority: 2 });
+            log.info(`Sending to queue ${QUEUE}...`);
+            if (!ok) {
+              amqpChannel.once('drain', send);
+            } else {
+              resolve();
+            }
+          }
+          send();
+        });
+        log.info('Crawl message successfully requeued');
         log.info(`Container exiting due to uncaught crawler error (exit code ${ExitCodes.UNCAUGHT_CRAWL_ERROR})`);
         process.exit(ExitCodes.UNCAUGHT_CRAWL_ERROR);
       }

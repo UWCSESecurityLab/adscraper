@@ -68,7 +68,6 @@ declare global {
   var PAGE_SLEEP_TIME: number;
   var VIEWPORT: { width: number, height: number}
   var CRAWL_ID: number;
-  var LOG_LEVEL: log.LogLevel;
 }
 
 function setupGlobals(crawlerFlags: CrawlerFlags) {
@@ -393,11 +392,11 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         }
       })();
       await Promise.race([_crawl, urlTimeout]);
+      await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
     } catch (e: any) {
       log.error(e, seedPage.url());
     } finally {
-      await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
-      seedPage.close();
+      await seedPage.close();
     }
   }
   await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
