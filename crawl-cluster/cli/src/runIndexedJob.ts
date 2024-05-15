@@ -102,7 +102,7 @@ async function main() {
       const jobId = result.rows[0].id;
       console.log(`Created job ${jobId} in Postgres`);
 
-      const crawlInputDir = path.join(jobSpec.dataDir, `job${jobId}/crawl_inputs`);
+      const crawlInputDir = path.join(jobSpec.hostDataDir, `job${jobId}/crawl_inputs`);
       fs.mkdirSync(crawlInputDir, { recursive: true });
 
       // Generate crawl inputs and job YAML
@@ -169,7 +169,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "jobId": jobId,
       "crawlName": crawlSpec.crawlName,
       "resumeIfAble": true,
-      "outputDir": jobSpec.dataDir,
+      "outputDir": jobSpec.containerDataDir,
       // "urlList": crawlSpec.crawlListFile,
       "profileId": crawlSpec.profileId,
       "chromeOptions": {
@@ -222,7 +222,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
       "crawlName": `${jobSpec.jobName}_url_${i}`,
-      "outputDir": jobSpec.dataDir,
+      "outputDir": jobSpec.containerDataDir,
       "resumeIfAble": false,
       "url": url,
       "chromeOptions": {
@@ -274,7 +274,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
       "crawlName": `landing_page_for_ad_${adIds[i]}`,
-      "outputDir": jobSpec.dataDir,
+      "outputDir": jobSpec.containerDataDir,
       "resumeIfAble": false,
       "url": urls[i],
       "adId": adIds[i],

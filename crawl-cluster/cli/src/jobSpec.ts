@@ -4,9 +4,14 @@ export default interface JobSpec {
   // continue from where it left off.
   jobName: string;
 
-  // Where screenshots, logs, and scraped content should be stored. Creates
-  // or uses a directory for this job with the name of the job.
-  dataDir: string;
+  // The directory on the host where screenshots, logs, and scraped content
+  // should be stored. Creates or uses a directory for this job with the
+  // name of the job.
+  hostDataDir: string;
+
+  // Where hostDataDir is mounted in the container. Must refer to the same
+  // directory as hostDataDir on the host.
+  containerDataDir: string;
 
   // Max number of Chromium instances to run in parallel
   maxWorkers: number;
@@ -56,6 +61,9 @@ interface ProfileOptions {
   // ssh -N -D 5001 -i [sshKey] -p [sshPort] [sshHost]
   sshHost?: string;
   sshRemotePort?: number;
+  // File location of the SSH private key.
+  // Refers to a location within the container (typically a subdirectory of
+  // containerDataDir).
   sshKey?: string;
 }
 
@@ -122,11 +130,15 @@ export interface ProfileCrawlList {
   // Location of the Chrome user-data-dir to use for this crawl.
   // If the directory doesn't exist, creates a new one at this directory,
   // called profile_<profileId>
+  // Refers to a location within the container (typically a subdirectory of
+  // containerDataDir).
   profileDir?: string;
 
   // Location the profile should be written to after the crawl,
   // if you do not want to overwrite the existing profile at
   // profileDir.
+  // Refers to a location within the container (typically a subdirectory of
+  // containerDataDir).
   newProfileDir?: string;
 
   // Proxy server to use for this profile's crawl (optional).
