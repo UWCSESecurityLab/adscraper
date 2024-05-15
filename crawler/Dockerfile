@@ -1,3 +1,4 @@
+# Docker image for the adscraper command line interface.
 FROM ghcr.io/puppeteer/puppeteer:21.6.0
 
 USER root
@@ -11,4 +12,4 @@ COPY --chown=pptruser:pptruser . .
 RUN npx tsc \
     && npx typescript-json-schema ./tsconfig.json CrawlerFlags > ./gen/crawlerFlagsSchema.json
 
-CMD node gen/crawler-amqp.js -j $JOB_ID -a $BROKER_URL
+ENTRYPOINT node gen/crawler-cli.js

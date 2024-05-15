@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
         - name: crawler
-          image: docker.io/ezeng/adscraper:latest
+          image: docker.io/ezeng/adscraper:k8s-amqp-job-worker
           imagePullPolicy: Always
           resources:
             requests:
@@ -53,7 +53,7 @@ spec:
               value: /home/pptruser/.cache/puppeteer
       nodeSelector:
         crawler: "true"
-      restartPolicy: OnFailure
+      restartPolicy: Never
       securityContext:
         capabilities:
             add:

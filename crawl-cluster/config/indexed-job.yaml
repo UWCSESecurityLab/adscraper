@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: adscraper-job-indexed
+  name: adscraper-job-indexed  # Will be overwritten with name provided in JobSpec
 spec:
   # These values will be set automatically by runIndexedJob.ts
   # parallelism: 4  # maxWorkers
@@ -9,19 +9,18 @@ spec:
   completionMode: Indexed
   # backoffLimitPerIndex: 5
   template:
+    metadata:
+      name: adscraper-job-indexed  # Will be overwritten with name provided in JobSpec
     spec:
       restartPolicy: Never
       containers:
         - name: crawler
-          image: docker.io/ezeng/adscraper:indexed
+          image: docker.io/ezeng/adscraper:k8s-indexed-job-worker
           imagePullPolicy: Always
           resources:
             requests:
               memory: 4G
               cpu: 2
-            # limits:
-              # memory: 4G
-              # cpu: 2
           volumeMounts:
           - mountPath: /home/pptruser/data
             name: adscraper-storage

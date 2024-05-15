@@ -1,3 +1,8 @@
+// This script runs an adscraper as a worker in a Kubernetes job.
+// This is the entrypoint of the container defined by Dockerfile. Dockerfile.amqp.
+// It reads the crawler flags from an AMQP message queue, which is populated
+// by crawl-cluster/cli/src/runJob.ts, and runs the crawl.
+import amqp from 'amqplib';
 import commandLineArgs from 'command-line-args';
 import commandLineUsage from 'command-line-usage';
 import fs from 'fs';
@@ -13,7 +18,6 @@ import * as log from './util/log.js';
 import { sleep } from './util/timeout.js';
 
 let execPromise = util.promisify(exec);
-
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
@@ -31,10 +35,10 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     description: 'Job ID of this crawl',
   },
   {
-    name: 'index',
-    alias: 'i',
+    name: 'amqp_broker_url',
+    alias: 'a',
     type: String,
-    description: 'Job completion index (index of crawl flags file)'
+    description: 'Host and port of the AMQP broker.'
   }
 ];
 const options = commandLineArgs(optionsDefinitions)._all;
@@ -62,10 +66,9 @@ function validateCrawlSpec(input: any) {
 
   if (vRes.valid) {
     return input as crawler.CrawlerFlags;
-  } else {
-    console.log(vRes.errors.join('\n'));
-    return false;
   }
+  console.log('Input did not validate');
+  throw new Error(vRes.errors.join('\n'));
 }
 
 async function main() {
@@ -75,23 +78,32 @@ async function main() {
       log.strError('Invalid job id: ' + options.job_id)
       process.exit(ExitCodes.INPUT_ERROR);
     }
-    if (!options.index) {
-      log.strError('Job completion index not provided');
-      process.exit(ExitCodes.INPUT_ERROR);
+
+    // Set up AMQP client
+    const amqpConn = await amqp.connect(options.amqp_broker_url);
+    const amqpChannel = await amqpConn.createChannel();
+    const QUEUE = `job${options.job_id}`;
+
+    // Poll the queue for a message
+    log.info('Polling message queue for crawl parameters');
+    let message = await amqpChannel.get(QUEUE);
+    let i = 0;
+    while (message == false && i < 12) {
+      i++;
+      await sleep(5000);
+      message = await amqpChannel.get(QUEUE);
     }
-    const crawlFile = `/home/pptruser/data/job${options.job_id}/crawl_inputs/crawl_input_${options.index}.json`;
-    if (!fs.existsSync(crawlFile)) {
-      log.strError(`Could not find crawl file at ${crawlFile}`);
-      process.exit(ExitCodes.INPUT_ERROR);
+    if (!message) {
+      log.warning('No messages in queue after 60s, exiting');
+      process.exit(ExitCodes.OK);
     }
-    let raw = fs.readFileSync(crawlFile).toString();
+    log.info('Received message from queue');
+    amqpChannel.ack(message);
+
+    let data = message.content.toString();
 
     // Parse the crawl message, set up logger
-    let flags = validateCrawlSpec(JSON.parse(raw));
-    if (!flags) {
-      log.strError('Crawl flags did not pass validation');
-      process.exit(ExitCodes.INPUT_ERROR);
-    }
+    let flags = validateCrawlSpec(JSON.parse(data));
     log.setLogDirFromFlags(flags);
 
     // Set up database connection
@@ -131,7 +143,6 @@ async function main() {
 
     if (flags.profileOptions.sshHost && flags.profileOptions.sshRemotePort && flags.profileOptions.sshRemotePort) {
       log.info('Setting up SSH tunnel');
-      // Copy SSH keys to container home dir, set permissions to prevent errors
       fs.mkdirSync('/home/pptruser/.ssh', { recursive: true });
       fs.chmodSync('/home/pptruser/.ssh', 0o700);
       fs.copyFileSync(flags.profileOptions.sshKey, '/home/pptruser/.ssh/id_rsa');
@@ -231,6 +242,26 @@ async function main() {
         log.info(`Container exiting due to non-retryable error (exit code ${ExitCodes.NON_RETRYABLE_ERROR})`);
         process.exit(ExitCodes.NON_RETRYABLE_ERROR);
       } else {
+        // For uncaught crawl errors, more often than not these are flaky issues
+        // like the pod running out of memory, a misbehaving site crashing the
+        // browser, or the DevTools protocol connection breaking. In these
+        // cases it should be safe to restart the crawl.
+        log.info('Handling uncaught crawler error - requeuing crawl message...');
+        // To restart, send the initial crawl message back to the queue with a
+        // higher priority so it is consumed first.
+        await new Promise<void>((resolve, reject) => {
+          let send = () => {
+            let ok = amqpChannel.sendToQueue(QUEUE, Buffer.from(JSON.stringify(flags)), { priority: 2 });
+            log.info(`Sending to queue ${QUEUE}...`);
+            if (!ok) {
+              amqpChannel.once('drain', send);
+            } else {
+              resolve();
+            }
+          }
+          send();
+        });
+        log.info('Crawl message successfully requeued');
         log.info(`Container exiting due to uncaught crawler error (exit code ${ExitCodes.UNCAUGHT_CRAWL_ERROR})`);
         process.exit(ExitCodes.UNCAUGHT_CRAWL_ERROR);
       }

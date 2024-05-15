@@ -1,5 +1,6 @@
-# k8s adscraper worker image, for indexed jobs. Pushes to
-# ezeng/adscraper:k8s-indexed-job-worker
+# k8s adscraper worker image, for non-indexed jobs that assign pods using an
+# AMQP work queue. Pushes to ezeng/adscraper:k8s-amqp-job-worker
+
 FROM ghcr.io/puppeteer/puppeteer:21.6.0
 
 USER root
@@ -13,4 +14,4 @@ COPY --chown=pptruser:pptruser . .
 RUN npx tsc \
     && npx typescript-json-schema ./tsconfig.json CrawlerFlags > ./gen/crawlerFlagsSchema.json
 
-CMD node gen/k8s-indexed-job-worker.js -j $JOB_ID -i $JOB_COMPLETION_INDEX
+CMD node gen/k8s-amqp-job-worker.js -j $JOB_ID -a $BROKER_URL
