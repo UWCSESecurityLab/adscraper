@@ -1,0 +1,72 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adscraper-job-indexed
+spec:
+  # These values will be set automatically by runIndexedJob.ts
+  # parallelism: 4  # maxWorkers
+  # completions: 8  # Number of individual crawls
+  completionMode: Indexed
+  # backoffLimitPerIndex: 5
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: crawler
+          image: docker.io/ezeng/adscraper:indexed
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 4G
+              cpu: 2
+            # limits:
+              # memory: 4G
+              # cpu: 2
+          volumeMounts:
+          - mountPath: /home/pptruser/data
+            name: adscraper-storage
+          env:
+            # The job id will be set automatically by runJob.ts
+            # - name: JOB_ID
+            #   value: 123
+            - name: PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: database
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: user
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: PG_HOST
+              value: postgres.default.svc.cluster.local
+            - name: PG_PORT
+              value: "5432"
+            - name: PUPPETEER_CACHE_DIR
+              value: /home/pptruser/.cache/puppeteer
+      nodeSelector:
+        crawler: "true"
+      securityContext:
+        capabilities:
+            add:
+            - SYS_ADMIN
+      # Set up your storage mount here
+      # volumes:
+      #   - name: adscraper-storage
+  backoffLimit: 5
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onExitCodes:
+        operator: In
+        values: [244]
+    - action: FailJob
+      onExitCodes:
+        operator: In
+        values: [242, 243, 245]
