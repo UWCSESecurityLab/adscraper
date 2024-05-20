@@ -169,7 +169,7 @@ async function main() {
       crawlSuccess = true;
     } catch (e: any) {
       log.strError('Crawl failed due to exception:');
-      if (!(e instanceof InputError) && !(e instanceof NonRetryableError) && e instanceof Error) {
+      if (e instanceof Error) {
         log.error(e);
       } else {
         log.strError(e);

@@ -59,37 +59,46 @@ export interface CrawlerFlags {
 declare global {
   var BROWSER: Browser;
   var FLAGS: CrawlerFlags;
+  var CRAWL_TIMEOUT: number;
+  var SITE_TIMEOUT: number;
   var PAGE_NAVIGATION_TIMEOUT: number;
-  var PAGE_SCRAPE_TIMEOUT: number;
-  var AD_SCRAPE_TIMEOUT: number;
-  var CLICKTHROUGH_TIMEOUT: number;
-  var AD_CLICK_TIMEOUT: number;
-  var AD_SLEEP_TIME: number;
   var PAGE_SLEEP_TIME: number;
-  var VIEWPORT: { width: number, height: number}
+  var PAGE_SCRAPE_TIMEOUT: number;
+  var AD_SLEEP_TIME: number;
+  var AD_SCRAPE_TIMEOUT: number;
+  var AD_CLICK_TIMEOUT: number;
+  var CLICKTHROUGH_TIMEOUT: number;
+  var VIEWPORT: { width: number, height: number }
   var CRAWL_ID: number;
 }
 
 function setupGlobals(crawlerFlags: CrawlerFlags) {
   globalThis.FLAGS = crawlerFlags;
-  // How long the crawler can spend on each clickthrough page
-  globalThis.CLICKTHROUGH_TIMEOUT = 60 * 1000;  // 60s
-  // How long the crawler should wait for something to happen after clicking an ad
-  globalThis.AD_CLICK_TIMEOUT = 10 * 1000;  // 10s
+  // How long the crawler can spend on each item in the crawl list
+  // (including scraping ads, landing pages, subpages)
+  globalThis.SITE_TIMEOUT = 15 * 60 * 1000;  // 15min
   // How long the crawler should wait for a page to load.
   globalThis.PAGE_NAVIGATION_TIMEOUT = 3 * 60 * 1000;  // 3min
+  // How long the crawler should sleep before scraping a page
+  globalThis.PAGE_SLEEP_TIME = 5 * 1000;  // 5s
   // How long the crawler can spend scraping the HTML of a page.
   globalThis.PAGE_SCRAPE_TIMEOUT = 2 * 60 * 1000;  // 2min
-  // How long the crawler can spend scraping the HTML content and screenshot of an ad.
-  // must be greater than |AD_SLEEP_TIME|
-  globalThis.AD_SCRAPE_TIMEOUT = 20 * 1000;  // 20s
   // How long the crawler should sleep before scraping/screenshotting an ad
   globalThis.AD_SLEEP_TIME = 5 * 1000;  // 5s
-  // How long the crawler should sleep before scraping a page
-  globalThis.PAGE_SLEEP_TIME = 10 * 1000;  // 10s
+  // How long the crawler can spend scraping the HTML content and screenshot of
+  // an ad. Must be greater than |AD_SLEEP_TIME|
+  globalThis.AD_SCRAPE_TIMEOUT = 20 * 1000;  // 20s
+  // How long the crawler should wait for something to happen after clicking an ad
+  globalThis.AD_CLICK_TIMEOUT = 10 * 1000;  // 10s
+  // How long the crawler can spend on each clickthrough page
+  globalThis.CLICKTHROUGH_TIMEOUT = 60 * 1000;  // 60s
   // Size of the viewport
   globalThis.VIEWPORT = { width: 1366, height: 768 };
+  // Default log level is INFO
   globalThis.LOG_LEVEL = crawlerFlags.logLevel ? crawlerFlags.logLevel : log.LogLevel.INFO;
+  // Set up log directory based on crawler flag settings. This is a
+  // separate function that can be called from other scripts that call crawl()
+  // and want to set up logging earlier.
   log.setLogDirFromFlags(crawlerFlags);
 }
 
@@ -190,7 +199,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   }
 
   // Now that the length of the crawl list is known, set the global timeout
-  const OVERALL_TIMEOUT = Math.min(2147483647, crawlList.length * 15 * 60 * 1000);
+  // (15 minutes per site in the list)
+  globalThis.CRAWL_TIMEOUT = Math.min(2147483647, crawlList.length * 15 * 60 * 1000);
 
   let crawlListStartingIndex = 0;
 
@@ -244,7 +254,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
       await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$3',
-          [os.hostname(), await publicIpv4(), CRAWL_ID]);
+        [os.hostname(), await publicIpv4(), CRAWL_ID]);
     } else {
       // If it doesn't exist, then create a new crawl entry with the given name
       globalThis.CRAWL_ID = await createCrawlEntry();
@@ -275,132 +285,148 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
     executablePath: FLAGS.chromeOptions.executablePath
   });
 
+  // TODO: move handling of SIGINT and SIGTERM out of crawler and into
+  // the container run scripts. This works for now because it triggers and
+  // exception that is handled by those scripts, but ideally those scripts
+  // should handle the signals directly.
   process.on('SIGINT', async () => {
     log.info('SIGINT received, closing browser...');
+    await BROWSER.close()
+  });
+
+  process.on('SIGTERM', async () => {
+    log.info('SIGTERM received, closing browser...');
     await BROWSER.close();
   });
 
   const version = await BROWSER.version();
   log.info('Running ' + version);
 
-  // Main loop through crawl list
-  for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
-    const url = crawlList[i];
+  // Set up overall timeout, race with main loop
+  let [overallTimeout, overallTimeoutId] = createAsyncTimeout<void>('Overall crawl timeout reached', CRAWL_TIMEOUT);
+  let _crawlLoop = (async () => {
+    // Main loop through crawl list
+    for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
+      const url = crawlList[i];
 
-    let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
+      let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
-    // Set overall timeout for this crawl list item
-    let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
-      `${url}: overall site timeout reached`, OVERALL_TIMEOUT);
+      // Set timeout for this crawl list item
+      let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
+        `${url}: overall site timeout reached`, SITE_TIMEOUT);
 
-    let seedPage = await BROWSER.newPage();
+      let seedPage = await BROWSER.newPage();
 
-    try {
-      let _crawl = (async () => {
-        // Insert record for this crawl list item
-        try {
-          // Open the URL and scrape it (if specified)
-          let pageId;
-          if (isAdUrlCrawl) {
-            pageId = await loadAndHandlePage(url, seedPage, {
-              pageType: PageType.LANDING,
-              referrerAd: prevAdId,
-              reload: 0
-            });
-          } else {
-            pageId = await loadAndHandlePage(url, seedPage, {
-              pageType: PageType.MAIN,
-              reload: 0
-            });
-          }
-
-          if (FLAGS.crawlOptions.refreshPage) {
-            await seedPage.close();
-            seedPage = await BROWSER.newPage();
+      try {
+        // Set up race with crawl list item timeout
+        let _crawl = (async () => {
+          try {
+            let pageId;
             if (isAdUrlCrawl) {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.LANDING,
                 referrerAd: prevAdId,
-                reload: 1 });
+                reload: 0
+              });
             } else {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.MAIN,
-                reload: 1
-              });
-            }
-          }
-
-          let subpageExplorer = new SubpageExplorer();
-
-          // Open additional pages (if specified) and scrape them (if specified)
-          if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
-            const articleUrl = await subpageExplorer.findArticle(seedPage);
-            if (articleUrl) {
-              let articlePage = await BROWSER.newPage();
-              await loadAndHandlePage(articleUrl, articlePage, {
-                pageType: PageType.SUBPAGE,
-                referrerPageId: pageId,
-                referrerPageUrl: seedPage.url(),
                 reload: 0
               });
-              await articlePage.close();
-              if (FLAGS.crawlOptions.refreshPage) {
-                articlePage = await BROWSER.newPage();
+            }
+
+            if (FLAGS.crawlOptions.refreshPage) {
+              await seedPage.close();
+              seedPage = await BROWSER.newPage();
+              if (isAdUrlCrawl) {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.LANDING,
+                  referrerAd: prevAdId,
+                  reload: 1
+                });
+              } else {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.MAIN,
+                  reload: 1
+                });
+              }
+            }
+
+            let subpageExplorer = new SubpageExplorer();
+
+            // Open additional pages (if specified) and scrape them (if specified)
+            if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
+              const articleUrl = await subpageExplorer.findArticle(seedPage);
+              if (articleUrl) {
+                let articlePage = await BROWSER.newPage();
                 await loadAndHandlePage(articleUrl, articlePage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 1
+                  reload: 0
                 });
                 await articlePage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  articlePage = await BROWSER.newPage();
+                  await loadAndHandlePage(articleUrl, articlePage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await articlePage.close();
+                }
+              } else {
+                log.strError(`${url}: Couldn't find article`);
               }
-            } else {
-              log.strError(`${url}: Couldn't find article`);
             }
-          }
 
-          for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
-            const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
-            if (urlWithAds) {
-              let adsPage = await BROWSER.newPage();
-              await loadAndHandlePage(urlWithAds, adsPage, {
-                pageType: PageType.SUBPAGE,
-                referrerPageId: pageId,
-                referrerPageUrl: seedPage.url(),
-                reload: 0
-              });
-              await adsPage.close();
-              if (FLAGS.crawlOptions.refreshPage) {
-                adsPage = await BROWSER.newPage();
+            for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
+              const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
+              if (urlWithAds) {
+                let adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 1
+                  reload: 0
                 });
                 await adsPage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  adsPage = await BROWSER.newPage();
+                  await loadAndHandlePage(urlWithAds, adsPage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await adsPage.close();
+                }
+              } else {
+                log.strError(`${url}: Couldn't find page with ads`);
+                break;
               }
-            } else {
-              log.strError(`${url}: Couldn't find page with ads`);
-              break;
             }
+          } catch (e: any) {
+            log.error(e, seedPage.url());
+          } finally {
+            clearTimeout(urlTimeoutId);
           }
-        } catch (e: any) {
-          log.error(e, seedPage.url());
-        } finally {
-          clearTimeout(urlTimeoutId);
-        }
-      })();
-      await Promise.race([_crawl, urlTimeout]);
-      await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i+1, CRAWL_ID]);
-    } catch (e: any) {
-      log.error(e, seedPage.url());
-    } finally {
-      await seedPage.close();
+        })();
+        await Promise.race([_crawl, urlTimeout]);
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
+      } catch (e: any) {
+        log.error(e, seedPage.url());
+      } finally {
+        await seedPage.close();
+      }
     }
-  }
-  await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
-  return;
+    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
+    return;
+  })();
+  // If the overall timeout is reached it will throw an error to end the
+  // crawl.
+  await Promise.race([_crawlLoop, overallTimeout]);
 }
 
 /**
