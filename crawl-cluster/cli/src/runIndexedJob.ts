@@ -173,7 +173,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       // "urlList": crawlSpec.crawlListFile,
       "profileId": crawlSpec.profileId,
       "chromeOptions": {
-        "profileDir": '/home/pptruser/chrome_profile',
+        "profileDir": jobSpec.profileOptions.copyProfileIntoContainer ? '/home/pptruser/chrome_profile' : crawlSpec.profileDir,
         "headless": 'new',
         "proxyServer": crawlSpec.proxyServer ? crawlSpec.proxyServer : jobSpec.profileOptions.proxyServer,
       },
@@ -183,6 +183,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "scrapeOptions": jobSpec.scrapeOptions,
       "profileOptions": {
         "useExistingProfile": jobSpec.profileOptions.useExistingProfile && crawlSpec.profileDir ? true : false,
+        "copyProfileIntoContainer": jobSpec.profileOptions.copyProfileIntoContainer ? true : false,
         "writeProfile": jobSpec.profileOptions.writeProfileAfterCrawl && (crawlSpec.profileDir || crawlSpec.newProfileDir) ? true : false,
         "profileDir": crawlSpec.profileDir,
         "newProfileDir": crawlSpec.newProfileDir,
@@ -233,6 +234,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
       "scrapeOptions": jobSpec.scrapeOptions,
       "profileOptions": {
         "useExistingProfile": false,
+        "copyProfileIntoContainer": false,
         "writeProfile": false,
         "sshHost": jobSpec.profileOptions.sshHost,
         "sshRemotePort": jobSpec.profileOptions.sshRemotePort,
@@ -285,6 +287,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
       "scrapeOptions": jobSpec.scrapeOptions,
       "profileOptions": {
         "useExistingProfile": false,
+        "copyProfileIntoContainer": false,
         "writeProfile": false
       },
     };
@@ -331,6 +334,7 @@ main();
 interface CrawlerFlagsWithProfileHandling extends CrawlerFlags {
   profileOptions: {
     useExistingProfile: boolean;
+    copyProfileIntoContainer: boolean;
     writeProfile: boolean;
     profileDir?: string;
     newProfileDir?: string;

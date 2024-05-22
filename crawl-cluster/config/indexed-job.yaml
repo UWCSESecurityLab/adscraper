@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: crawler
-          image: docker.io/ezeng/adscraper:k8s-indexed-job-worker
+          image: docker.io/ezeng/adscraper:no-profile-copy
           imagePullPolicy: Always
           resources:
             requests:
@@ -51,6 +51,11 @@ spec:
               value: /home/pptruser/.cache/puppeteer
       nodeSelector:
         crawler: "true"
+      resizePolicy:
+        - resourceName: cpu
+          restartPolicy: NotRequired
+        - resourceName: memory
+          restartPolicy: NotRequired
       securityContext:
         capabilities:
             add:

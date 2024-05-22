@@ -154,7 +154,7 @@ async function main() {
       }
     }
 
-    if (flags.profileOptions.useExistingProfile) {
+    if (flags.profileOptions.useExistingProfile && flags.profileOptions.copyProfileIntoContainer) {
       log.info(`Copying profile from ${flags.profileOptions.profileDir} to container`);
       fs.cpSync(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
         { recursive: true });

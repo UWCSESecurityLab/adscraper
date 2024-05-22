@@ -39,9 +39,14 @@ interface ProfileOptions {
   // |crawls.profileDir| for each crawl.
   useExistingProfile?: boolean;
 
+  // If true, the crawler will make a copy of the profile into the container's
+  // ephemeral storage, rather than setting Chrome's userDataDir to the
+  // provided profileDir.
+  copyProfileIntoContainer?: boolean;
+
   // Specifies what should happen to the profile after the crawl is complete.
-  // If false, the profile is deleted with the container after the crawl is
-  // complete.
+  // If false, no action is taken (and changes to profile is deleted if it is
+  // copied using copyProfileIntoContainer).
   // If true, the profile is writen to the directory specified in
   // |crawls.newProfileDir| if provided, or updates the existing profile in
   // |crawls.profileDir| if not.
