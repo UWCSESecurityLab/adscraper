@@ -44,6 +44,7 @@ export interface CrawlerFlags {
     findAndCrawlPageWithAds: number,
     findAndCrawlArticlePage: boolean
     refreshPage: boolean,
+    checkpointFreq?: number,
   }
 
   scrapeOptions: {
@@ -102,7 +103,7 @@ function setupGlobals(crawlerFlags: CrawlerFlags) {
   log.setLogDirFromFlags(crawlerFlags);
 }
 
-export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
+export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpointFn?: () => Promise<void>) {
   // Initialize global variables and clients
   // console.log(flags);
   setupGlobals(flags);
@@ -216,6 +217,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
         crawl_list: crawlListFile ? crawlListFile : FLAGS.url,
         crawl_list_current_index: 0,
         crawl_list_length: crawlList.length,
+        last_checkpoint_index: flags.crawlOptions.checkpointFreq ? 0 : undefined,
         profile_id: FLAGS.profileId,
         profile_dir: FLAGS.chromeOptions.profileDir,
         crawler_hostname: os.hostname(),
@@ -232,6 +234,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
 
     // If it does, verify that it can be resumed
     if (crawlExists && FLAGS.resumeIfAble) {
+      globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       // Check that the crawl list name is the same
       if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
         log.strError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
@@ -244,15 +247,20 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       }
       // Check if the crawl is already completed
       if (prevCrawl.rows[0].completed) {
-        log.info(`Crawl with name ${FLAGS.crawlName} is already completed, exiting`);
+        log.info(`Crawl ${CRAWL_ID} (${FLAGS.crawlName}) is already completed, exiting`);
         return;
       }
 
       log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) at index ${prevCrawl.rows[0].crawl_list_current_index} of ${prevCrawl.rows[0].crawl_list_length}`);
 
       // Then assign the crawl id and starting index
-      globalThis.CRAWL_ID = prevCrawl.rows[0].id;
-      crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
+      if (FLAGS.crawlOptions.checkpointFreq && checkpointFn) {
+        // If doing a checkpointed crawl, start from checkpoint index.
+        crawlListStartingIndex = prevCrawl.rows[0].last_checkpoint_index;
+      } else {
+        // Otherwise use the last recorded index.
+        crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
+      }
       await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$3',
         [os.hostname(), await publicIpv4(), CRAWL_ID]);
     } else {
@@ -305,8 +313,20 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
   // Set up overall timeout, race with main loop
   let [overallTimeout, overallTimeoutId] = createAsyncTimeout<void>('Overall crawl timeout reached', CRAWL_TIMEOUT);
   let _crawlLoop = (async () => {
+    let lastCheckpointTime = Date.now();
     // Main loop through crawl list
     for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
+      // Check if we need to run the checkpoint function
+      if (FLAGS.crawlOptions.checkpointFreq
+          && checkpointFn
+          && (Date.now() - lastCheckpointTime) / 1000 > FLAGS.crawlOptions.checkpointFreq) {
+        log.info(`Running checkpoint function at index ${i} in crawl list`);
+        await checkpointFn();
+        await db.postgres.query('UPDATE crawl SET last_checkpoint_index=$1 WHERE id=$2', [i, CRAWL_ID]);
+        log.info(`Successfully saved checkpoint at index ${i}`);
+        lastCheckpointTime = Date.now();
+      }
+
       const url = crawlList[i];
 
       let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;

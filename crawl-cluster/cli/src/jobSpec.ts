@@ -45,7 +45,13 @@ interface ProfileOptions {
   // If true, the profile is writen to the directory specified in
   // |crawls.newProfileDir| if provided, or updates the existing profile in
   // |crawls.profileDir| if not.
-  writeProfileAfterCrawl?: boolean
+  writeProfileAfterCrawl?: boolean;
+
+  // If writeProfileAfterCrawl is set to true, crawler can be set to
+  // periodically save the profile during the crawl, to avoid losing progress
+  // if the crawler crashes during a long crawl. This sets the frequency
+  // of checkpoints, in seconds.
+  profileCheckpointFreq?: number;
 
   // Proxy server to use for all profiles/crawls in this job (optional).
   // Launches Chrome with the provided SOCKS proxy URL.

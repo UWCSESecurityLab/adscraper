@@ -89,11 +89,12 @@ async function main() {
     let raw = fs.readFileSync(crawlFile).toString();
 
     // Parse the crawl message, set up logger
-    let flags = validateCrawlSpec(JSON.parse(raw));
-    if (!flags) {
+    let validated = validateCrawlSpec(JSON.parse(raw));
+    if (!validated) {
       log.strError('Crawl flags did not pass validation');
       process.exit(ExitCodes.INPUT_ERROR);
     }
+    let flags: crawler.CrawlerFlags = validated;
     log.setLogDirFromFlags(flags);
 
     // Set up database connection
@@ -160,38 +161,7 @@ async function main() {
         { recursive: true });
     }
 
-    let crawlSuccess = false;
-    let error: Error | undefined = undefined;
-    try {
-      log.info('Running crawler...')
-      await crawler.crawl(flags, pgConf);
-      log.info('Crawl succeeded');
-      crawlSuccess = true;
-    } catch (e: any) {
-      log.strError('Crawl failed due to exception:');
-      if (e instanceof Error) {
-        log.error(e);
-      } else {
-        log.strError(e);
-      }
-      crawlSuccess = false;
-      error = e;
-    }
-
-    // If the crawl failed due to inputs, we don't need to re-save the profile
-    // since the browser should not have launched and changed anything, so
-    // we can exit now.
-    if (!crawlSuccess) {
-      if (error instanceof InputError) {
-        log.info(`Container exiting (without saving profile) due to input error (exit code ${ExitCodes.INPUT_ERROR})`);
-        process.exit(ExitCodes.INPUT_ERROR);
-      }
-    }
-
-    // Resave the profile if requested, unless it is "nonretryable", which
-    // may indicate a permissions issue or other issue that makes it unsafe
-    // to restart the crawl.
-    if (flags.profileOptions.writeProfile && !(error instanceof NonRetryableError)) {
+    async function saveProfile() {
       // Filter for fs.cpSync. Ignores the Chrome profile singletons files
       // (which are symlinks), other symlinks, or files that disappear
       // since the command was invoked.
@@ -221,6 +191,53 @@ async function main() {
           recursive: true,
           filter: filterInvalidFiles
         });
+      }
+    }
+
+    let crawlSuccess = false;
+    let error: Error | undefined = undefined;
+    let shouldCheckpoint = flags.profileOptions.writeProfile && flags.crawlOptions.checkpointFreq;
+    try {
+      log.info('Running crawler...')
+      await crawler.crawl(flags, pgConf, shouldCheckpoint ? saveProfile : undefined);
+      log.info('Crawl succeeded');
+      crawlSuccess = true;
+    } catch (e: any) {
+      log.strError('Crawl failed due to exception:');
+      if (e instanceof Error) {
+        log.error(e);
+      } else {
+        log.strError(e);
+      }
+      crawlSuccess = false;
+      error = e;
+    }
+
+    // If the crawl failed due to inputs, we don't need to re-save the profile
+    // since the browser should not have launched and changed anything, so
+    // we can exit now.
+    if (!crawlSuccess) {
+      if (error instanceof InputError) {
+        log.info(`Container exiting (without saving profile) due to input error (exit code ${ExitCodes.INPUT_ERROR})`);
+        process.exit(ExitCodes.INPUT_ERROR);
+      }
+    }
+
+    // Resave the profile if requested, unless it is "nonretryable", which
+    // may indicate a permissions issue or other issue that makes it unsafe
+    // to restart the crawl.
+    if (flags.profileOptions.writeProfile && !(error instanceof NonRetryableError)) {
+      await saveProfile();
+      if (shouldCheckpoint) {
+        // Update last checkpoint index with the final profile save
+        const crawlIdQuery = await db.postgres.query('SELECT id FROM crawl WHERE name=$1', [flags.crawlName]);
+        if (crawlIdQuery.rowCount == 0) {
+          log.warning(`Could not find id for crawl ${flags.crawlName}, can't update checkpoint index (should not reach here).`)
+        } else {
+          await db.postgres.query(`UPDATE crawl SET last_checkpoint_index=crawl_list_current_index WHERE id=$1`,
+            [crawlIdQuery.rows[0].id]);
+          log.info('Successfully saved profile after crawl');
+        }
       }
     }
 
