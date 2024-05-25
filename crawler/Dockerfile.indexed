@@ -13,4 +13,4 @@ COPY --chown=pptruser:pptruser . .
 RUN npx tsc \
     && npx typescript-json-schema ./tsconfig.json CrawlerFlags > ./gen/crawlerFlagsSchema.json
 
-CMD node gen/k8s-indexed-job-worker.js -j $JOB_ID -i $JOB_COMPLETION_INDEX
+CMD ["node", "gen/k8s-indexed-job-worker.js"]

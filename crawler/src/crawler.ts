@@ -297,9 +297,12 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
   // the container run scripts. This works for now because it triggers and
   // exception that is handled by those scripts, but ideally those scripts
   // should handle the signals directly.
+  // Problem: we can't interrupt the crawl loop directly from the signal
+  // handler. Workaround is to close the browser, and let the crawl loop
+  // throw an exception.
   process.on('SIGINT', async () => {
     log.info('SIGINT received, closing browser...');
-    await BROWSER.close()
+    await BROWSER.close();
   });
 
   process.on('SIGTERM', async () => {
@@ -312,141 +315,154 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
 
   // Set up overall timeout, race with main loop
   let [overallTimeout, overallTimeoutId] = createAsyncTimeout<void>('Overall crawl timeout reached', CRAWL_TIMEOUT);
-  let _crawlLoop = (async () => {
-    let lastCheckpointTime = Date.now();
-    // Main loop through crawl list
-    for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
-      // Check if we need to run the checkpoint function
-      if (FLAGS.crawlOptions.checkpointFreq
+  try {
+    let _crawlLoop = (async () => {
+
+      let lastCheckpointTime = Date.now();
+      // Main loop through crawl list
+      for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
+        if (!BROWSER.connected) {
+          throw new Error('Browser disconnected, ending crawl');
+        }
+
+        // Check if we need to run the checkpoint function
+        if (FLAGS.crawlOptions.checkpointFreq
           && checkpointFn
           && (Date.now() - lastCheckpointTime) / 1000 > FLAGS.crawlOptions.checkpointFreq) {
-        log.info(`Running checkpoint function at index ${i} in crawl list`);
-        await checkpointFn();
-        await db.postgres.query('UPDATE crawl SET last_checkpoint_index=$1 WHERE id=$2', [i, CRAWL_ID]);
-        log.info(`Successfully saved checkpoint at index ${i}`);
-        lastCheckpointTime = Date.now();
-      }
+          log.info(`Running checkpoint function at index ${i} in crawl list`);
+          await checkpointFn();
+          await db.postgres.query('UPDATE crawl SET last_checkpoint_index=$1 WHERE id=$2', [i, CRAWL_ID]);
+          log.info(`Successfully saved checkpoint at index ${i}`);
+          lastCheckpointTime = Date.now();
+        }
 
-      const url = crawlList[i];
+        const url = crawlList[i];
 
-      let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
+        let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
-      // Set timeout for this crawl list item
-      let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
-        `${url}: overall site timeout reached`, SITE_TIMEOUT);
+        // Set timeout for this crawl list item
+        let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
+          `${url}: overall site timeout reached`, SITE_TIMEOUT);
 
-      let seedPage = await BROWSER.newPage();
+        let seedPage = await BROWSER.newPage();
 
-      try {
-        // Set up race with crawl list item timeout
-        let _crawl = (async () => {
-          try {
-            let pageId;
-            if (isAdUrlCrawl) {
-              pageId = await loadAndHandlePage(url, seedPage, {
-                pageType: PageType.LANDING,
-                referrerAd: prevAdId,
-                reload: 0
-              });
-            } else {
-              pageId = await loadAndHandlePage(url, seedPage, {
-                pageType: PageType.MAIN,
-                reload: 0
-              });
-            }
-
-            if (FLAGS.crawlOptions.refreshPage) {
-              await seedPage.close();
-              seedPage = await BROWSER.newPage();
+        try {
+          // Set up race with crawl list item timeout
+          let _crawl = (async () => {
+            try {
+              let pageId;
               if (isAdUrlCrawl) {
                 pageId = await loadAndHandlePage(url, seedPage, {
                   pageType: PageType.LANDING,
                   referrerAd: prevAdId,
-                  reload: 1
+                  reload: 0
                 });
               } else {
                 pageId = await loadAndHandlePage(url, seedPage, {
                   pageType: PageType.MAIN,
-                  reload: 1
-                });
-              }
-            }
-
-            let subpageExplorer = new SubpageExplorer();
-
-            // Open additional pages (if specified) and scrape them (if specified)
-            if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
-              const articleUrl = await subpageExplorer.findArticle(seedPage);
-              if (articleUrl) {
-                let articlePage = await BROWSER.newPage();
-                await loadAndHandlePage(articleUrl, articlePage, {
-                  pageType: PageType.SUBPAGE,
-                  referrerPageId: pageId,
-                  referrerPageUrl: seedPage.url(),
                   reload: 0
                 });
-                await articlePage.close();
-                if (FLAGS.crawlOptions.refreshPage) {
-                  articlePage = await BROWSER.newPage();
+              }
+
+              if (FLAGS.crawlOptions.refreshPage) {
+                await seedPage.close();
+                seedPage = await BROWSER.newPage();
+                if (isAdUrlCrawl) {
+                  pageId = await loadAndHandlePage(url, seedPage, {
+                    pageType: PageType.LANDING,
+                    referrerAd: prevAdId,
+                    reload: 1
+                  });
+                } else {
+                  pageId = await loadAndHandlePage(url, seedPage, {
+                    pageType: PageType.MAIN,
+                    reload: 1
+                  });
+                }
+              }
+
+              let subpageExplorer = new SubpageExplorer();
+
+              // Open additional pages (if specified) and scrape them (if specified)
+              if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
+                const articleUrl = await subpageExplorer.findArticle(seedPage);
+                if (articleUrl) {
+                  let articlePage = await BROWSER.newPage();
                   await loadAndHandlePage(articleUrl, articlePage, {
                     pageType: PageType.SUBPAGE,
                     referrerPageId: pageId,
                     referrerPageUrl: seedPage.url(),
-                    reload: 1
+                    reload: 0
                   });
                   await articlePage.close();
+                  if (FLAGS.crawlOptions.refreshPage) {
+                    articlePage = await BROWSER.newPage();
+                    await loadAndHandlePage(articleUrl, articlePage, {
+                      pageType: PageType.SUBPAGE,
+                      referrerPageId: pageId,
+                      referrerPageUrl: seedPage.url(),
+                      reload: 1
+                    });
+                    await articlePage.close();
+                  }
+                } else {
+                  log.strError(`${url}: Couldn't find article`);
                 }
-              } else {
-                log.strError(`${url}: Couldn't find article`);
               }
-            }
 
-            for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
-              const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
-              if (urlWithAds) {
-                let adsPage = await BROWSER.newPage();
-                await loadAndHandlePage(urlWithAds, adsPage, {
-                  pageType: PageType.SUBPAGE,
-                  referrerPageId: pageId,
-                  referrerPageUrl: seedPage.url(),
-                  reload: 0
-                });
-                await adsPage.close();
-                if (FLAGS.crawlOptions.refreshPage) {
-                  adsPage = await BROWSER.newPage();
+              for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
+                const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
+                if (urlWithAds) {
+                  let adsPage = await BROWSER.newPage();
                   await loadAndHandlePage(urlWithAds, adsPage, {
                     pageType: PageType.SUBPAGE,
                     referrerPageId: pageId,
                     referrerPageUrl: seedPage.url(),
-                    reload: 1
+                    reload: 0
                   });
                   await adsPage.close();
+                  if (FLAGS.crawlOptions.refreshPage) {
+                    adsPage = await BROWSER.newPage();
+                    await loadAndHandlePage(urlWithAds, adsPage, {
+                      pageType: PageType.SUBPAGE,
+                      referrerPageId: pageId,
+                      referrerPageUrl: seedPage.url(),
+                      reload: 1
+                    });
+                    await adsPage.close();
+                  }
+                } else {
+                  log.strError(`${url}: Couldn't find page with ads`);
+                  break;
                 }
-              } else {
-                log.strError(`${url}: Couldn't find page with ads`);
-                break;
               }
+            } catch (e: any) {
+              log.error(e, seedPage.url());
+            } finally {
+              clearTimeout(urlTimeoutId);
             }
-          } catch (e: any) {
-            log.error(e, seedPage.url());
-          } finally {
-            clearTimeout(urlTimeoutId);
-          }
-        })();
-        await Promise.race([_crawl, urlTimeout]);
-        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
-      } catch (e: any) {
-        log.error(e, seedPage.url());
-      } finally {
-        await seedPage.close();
+          })();
+          await Promise.race([_crawl, urlTimeout]);
+          await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
+        } catch (e: any) {
+          log.error(e, seedPage.url());
+        } finally {
+          await seedPage.close();
+        }
       }
+      await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
+      return;
+    })();
+    await Promise.race([_crawlLoop, overallTimeout]);
+    if (BROWSER.connected) {
+      await BROWSER.close();
     }
-    await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
-    return;
-  })();
-  // If the overall timeout is reached it will throw an error to end the
-  // crawl.
-  await Promise.race([_crawlLoop, overallTimeout]);
+  } catch (e) {
+    if (BROWSER.connected) {
+      await BROWSER.close();
+    }
+    throw e;
+  }
 }
 
 /**

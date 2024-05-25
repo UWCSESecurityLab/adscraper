@@ -2,8 +2,6 @@
 // This is the entrypoint of the container defined by Dockerfile.indexed.
 // It reads the crawler flags from a file based on the job completion index
 // assigned by Kubernetes, and runs the crawl.
-import commandLineArgs from 'command-line-args';
-import commandLineUsage from 'command-line-usage';
 import fs from 'fs';
 import { Validator } from 'jsonschema';
 import { exec } from 'node:child_process';
@@ -17,44 +15,6 @@ import * as log from './util/log.js';
 
 let execPromise = util.promisify(exec);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
-
-const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
-  {
-    name: 'help',
-    alias: 'h',
-    type: Boolean,
-    description: 'Display this usage guide.',
-    group: 'main'
-  },
-  {
-    name: 'job_id',
-    alias: 'j',
-    type: Number,
-    description: 'Job ID of this crawl',
-  },
-  {
-    name: 'index',
-    alias: 'i',
-    type: String,
-    description: 'Job completion index (index of crawl flags file)'
-  }
-];
-const options = commandLineArgs(optionsDefinitions)._all;
-const usage = commandLineUsage([
-  {
-    header: 'Adscraper amqp runner',
-    content: 'Runs the adscraper crawler, by pulling inputs from an amqp message queue. Entrypoint for containers launched by the Kubernetes crawl cluster.'
-  },
-  {
-    header: 'Options',
-    optionList: optionsDefinitions
-  }
-]);
-
-if (options.help) {
-  console.log(usage);
-  process.exit(0);
-}
 
 function validateCrawlSpec(input: any) {
   console.log(input);
@@ -73,15 +33,19 @@ function validateCrawlSpec(input: any) {
 async function main() {
   try {
     // Verify that there is a job ID so we know which queue to consume from
-    if (!options.job_id) {
-      log.strError('Invalid job id: ' + options.job_id)
+    if (!process.env.JOB_ID) {
+      log.strError('JOB_ID environmental variable not set');
       process.exit(ExitCodes.INPUT_ERROR);
     }
-    if (!options.index) {
-      log.strError('Job completion index not provided');
+    let jobId = Number(process.env.JOB_ID);
+
+    if (!process.env.JOB_COMPLETION_INDEX) {
+      log.strError('JOB_COMPLETION_INDEX environmental variable not set');
       process.exit(ExitCodes.INPUT_ERROR);
     }
-    const crawlFile = `/home/pptruser/data/job${options.job_id}/crawl_inputs/crawl_input_${options.index}.json`;
+    let index = Number(process.env.JOB_COMPLETION_INDEX);
+
+    const crawlFile = `/home/pptruser/data/job_${jobId}/crawl_inputs/crawl_input_${index}.json`;
     if (!fs.existsSync(crawlFile)) {
       log.strError(`Could not find crawl file at ${crawlFile}`);
       process.exit(ExitCodes.INPUT_ERROR);
