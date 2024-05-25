@@ -102,7 +102,7 @@ async function main() {
       const jobId = result.rows[0].id;
       console.log(`Created job ${jobId} in Postgres`);
 
-      const crawlInputDir = path.join(jobSpec.hostDataDir, `job${jobId}/crawl_inputs`);
+      const crawlInputDir = path.join(jobSpec.hostDataDir, `job_${jobId}/crawl_inputs`);
       fs.mkdirSync(crawlInputDir, { recursive: true });
 
       // Generate crawl inputs and job YAML

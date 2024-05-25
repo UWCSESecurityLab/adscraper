@@ -33,7 +33,7 @@ globalThis.LOG_LEVEL = LogLevel.INFO;
 export function setLogDirFromFlags(crawlerFlags: CrawlerFlags) {
   let logDirSegments = [crawlerFlags.outputDir, 'logs'];
   if (crawlerFlags.jobId) {
-    logDirSegments.push(`job${crawlerFlags.jobId.toString()}`);
+    logDirSegments.push(`job_${crawlerFlags.jobId.toString()}`);
   }
   let logDir = path.resolve(...logDirSegments);
   if (!fs.existsSync(logDir)) {
