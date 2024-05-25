@@ -312,108 +312,113 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig) {
       let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
       // Set timeout for this crawl list item
-      let [siteTimeout, siteTimeoutId] = createAsyncTimeout(
+      let [urlTimeout, urlTimeoutId] = createAsyncTimeout(
         `${url}: overall site timeout reached`, SITE_TIMEOUT);
-      let seedPage: Page | undefined = undefined;
+
+      let seedPage = await BROWSER.newPage();
+
       try {
         // Set up race with crawl list item timeout
         let _crawl = (async () => {
-          seedPage = await BROWSER.newPage();
-          let pageId;
-          if (isAdUrlCrawl) {
-            pageId = await loadAndHandlePage(url, seedPage, {
-              pageType: PageType.LANDING,
-              referrerAd: prevAdId,
-              reload: 0
-            });
-          } else {
-            pageId = await loadAndHandlePage(url, seedPage, {
-              pageType: PageType.MAIN,
-              reload: 0
-            });
-          }
-
-          if (FLAGS.crawlOptions.refreshPage) {
-            await seedPage.close();
-            seedPage = await BROWSER.newPage();
+          try {
+            let pageId;
             if (isAdUrlCrawl) {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.LANDING,
                 referrerAd: prevAdId,
-                reload: 1
+                reload: 0
               });
             } else {
               pageId = await loadAndHandlePage(url, seedPage, {
                 pageType: PageType.MAIN,
-                reload: 1
-              });
-            }
-          }
-
-          let subpageExplorer = new SubpageExplorer();
-
-          // Open additional pages (if specified) and scrape them (if specified)
-          if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
-            const articleUrl = await subpageExplorer.findArticle(seedPage);
-            if (articleUrl) {
-              let articlePage = await BROWSER.newPage();
-              await loadAndHandlePage(articleUrl, articlePage, {
-                pageType: PageType.SUBPAGE,
-                referrerPageId: pageId,
-                referrerPageUrl: seedPage.url(),
                 reload: 0
               });
-              await articlePage.close();
-              if (FLAGS.crawlOptions.refreshPage) {
-                articlePage = await BROWSER.newPage();
+            }
+
+            if (FLAGS.crawlOptions.refreshPage) {
+              await seedPage.close();
+              seedPage = await BROWSER.newPage();
+              if (isAdUrlCrawl) {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.LANDING,
+                  referrerAd: prevAdId,
+                  reload: 1
+                });
+              } else {
+                pageId = await loadAndHandlePage(url, seedPage, {
+                  pageType: PageType.MAIN,
+                  reload: 1
+                });
+              }
+            }
+
+            let subpageExplorer = new SubpageExplorer();
+
+            // Open additional pages (if specified) and scrape them (if specified)
+            if (FLAGS.crawlOptions.findAndCrawlArticlePage) {
+              const articleUrl = await subpageExplorer.findArticle(seedPage);
+              if (articleUrl) {
+                let articlePage = await BROWSER.newPage();
                 await loadAndHandlePage(articleUrl, articlePage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 1
+                  reload: 0
                 });
                 await articlePage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  articlePage = await BROWSER.newPage();
+                  await loadAndHandlePage(articleUrl, articlePage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await articlePage.close();
+                }
+              } else {
+                log.strError(`${url}: Couldn't find article`);
               }
-            } else {
-              log.strError(`${url}: Couldn't find article`);
             }
-          }
 
-          for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
-            const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
-            if (urlWithAds) {
-              let adsPage = await BROWSER.newPage();
-              await loadAndHandlePage(urlWithAds, adsPage, {
-                pageType: PageType.SUBPAGE,
-                referrerPageId: pageId,
-                referrerPageUrl: seedPage.url(),
-                reload: 0
-              });
-              await adsPage.close();
-              if (FLAGS.crawlOptions.refreshPage) {
-                adsPage = await BROWSER.newPage();
+            for (let i = 0; i < FLAGS.crawlOptions.findAndCrawlPageWithAds; i++) {
+              const urlWithAds = await subpageExplorer.findHealthRelatedPagesWithAds(seedPage);
+              if (urlWithAds) {
+                let adsPage = await BROWSER.newPage();
                 await loadAndHandlePage(urlWithAds, adsPage, {
                   pageType: PageType.SUBPAGE,
                   referrerPageId: pageId,
                   referrerPageUrl: seedPage.url(),
-                  reload: 1
+                  reload: 0
                 });
                 await adsPage.close();
+                if (FLAGS.crawlOptions.refreshPage) {
+                  adsPage = await BROWSER.newPage();
+                  await loadAndHandlePage(urlWithAds, adsPage, {
+                    pageType: PageType.SUBPAGE,
+                    referrerPageId: pageId,
+                    referrerPageUrl: seedPage.url(),
+                    reload: 1
+                  });
+                  await adsPage.close();
+                }
+              } else {
+                log.strError(`${url}: Couldn't find page with ads`);
+                break;
               }
-            } else {
-              log.strError(`${url}: Couldn't find page with ads`);
-              break;
             }
+          } catch (e: any) {
+            log.error(e, seedPage.url());
+          } finally {
+            clearTimeout(urlTimeoutId);
           }
-
-          await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
-          await seedPage.close();
         })();
-        await Promise.race([_crawl, siteTimeout]);
-        clearTimeout(siteTimeoutId);
+        await Promise.race([_crawl, urlTimeout]);
+        await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
       } catch (e: any) {
-        log.error(e);
-        clearTimeout(siteTimeoutId);
+        log.error(e, seedPage.url());
+      } finally {
+        await seedPage.close();
       }
     }
     await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);

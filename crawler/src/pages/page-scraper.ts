@@ -81,9 +81,9 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata) {
         filename);
 
       log.debug(`${page.url()}: Scraped page content`);
+      clearTimeout(timeoutId);
       const db = DbClient.getInstance();
       await db.updatePage(metadata.pageId, scrapedPage);
-      clearTimeout(timeoutId);
     } catch (e) {
       clearTimeout(timeoutId);
       throw e;
