@@ -321,17 +321,8 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
       let lastCheckpointTime = Date.now();
       // Main loop through crawl list
       for (let i = crawlListStartingIndex; i < crawlList.length; i++) {
-        // Check if we should exit this loop because the browser was killed
         if (!BROWSER.connected) {
           throw new Error('Browser disconnected, ending crawl');
-        }
-
-        // Clean up any pages that didn't get cleaned up in the previous iteration
-        let oldPages = await BROWSER.pages();
-        if (oldPages.length > 0) {
-          for (let page of oldPages) {
-            await page.close();
-          }
         }
 
         // Check if we need to run the checkpoint function
@@ -346,6 +337,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
         }
 
         const url = crawlList[i];
+
         let prevAdId = isAdUrlCrawl ? crawlListAdIds[i] : undefined;
 
         // Set timeout for this crawl list item
