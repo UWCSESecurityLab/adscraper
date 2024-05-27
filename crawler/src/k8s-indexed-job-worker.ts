@@ -18,7 +18,6 @@ let execPromise = util.promisify(exec);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
 async function validateCrawlSpec(input: any) {
-  console.log(input);
   const buf = await fs.readFile(path.join(__dirname, 'crawlerFlagsSchema.json'));
   const schema = JSON.parse(buf.toString());
   const validator = new Validator();
@@ -58,10 +57,15 @@ async function main() {
     let validated = await validateCrawlSpec(JSON.parse(raw));
     if (!validated) {
       log.strError('Crawl flags did not pass validation');
+      console.log(JSON.parse(raw));
       process.exit(ExitCodes.INPUT_ERROR);
     }
     let flags: crawler.CrawlerFlags = validated;
     log.setLogDirFromFlags(flags);
+
+    log.info('------------------------------------------------------------------\n' +
+        `Starting new crawl task in job ${process.env.JOB_ID} with completion index ${process.env.JOB_COMPLETION_INDEX}`);
+    log.info(JSON.stringify(flags, undefined, 2));
 
     // Set up database connection
     let pgConf = {
