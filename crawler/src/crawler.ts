@@ -251,14 +251,15 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
         return;
       }
 
-      log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) at index ${prevCrawl.rows[0].crawl_list_current_index} of ${prevCrawl.rows[0].crawl_list_length}`);
 
       // Then assign the crawl id and starting index
       if (FLAGS.crawlOptions.checkpointFreq && checkpointFn) {
         // If doing a checkpointed crawl, start from checkpoint index.
+        log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) from last profile checkpoint index: ${prevCrawl.rows[0].last_checkpoint_index} of ${prevCrawl.rows[0].crawl_list_length}`);
         crawlListStartingIndex = prevCrawl.rows[0].last_checkpoint_index;
       } else {
         // Otherwise use the last recorded index.
+        log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) from last crawl index: ${prevCrawl.rows[0].crawl_list_current_index} of ${prevCrawl.rows[0].crawl_list_length}`);
         crawlListStartingIndex = prevCrawl.rows[0].crawl_list_current_index;
       }
       await db.postgres.query('UPDATE crawl SET crawler_hostname=$1, crawler_ip=$2 WHERE id=$3',
