@@ -2,7 +2,8 @@
 // This is the entrypoint of the container defined by Dockerfile.indexed.
 // It reads the crawler flags from a file based on the job completion index
 // assigned by Kubernetes, and runs the crawl.
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync } from 'fs';
 import { Validator } from 'jsonschema';
 import { exec } from 'node:child_process';
 import path from 'path';
@@ -16,9 +17,10 @@ import * as log from './util/log.js';
 let execPromise = util.promisify(exec);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
-function validateCrawlSpec(input: any) {
+async function validateCrawlSpec(input: any) {
   console.log(input);
-  const schema = JSON.parse(fs.readFileSync(path.join(__dirname, 'crawlerFlagsSchema.json')).toString());
+  const buf = await fs.readFile(path.join(__dirname, 'crawlerFlagsSchema.json'));
+  const schema = JSON.parse(buf.toString());
   const validator = new Validator();
   const vRes = validator.validate(input, schema);
 
@@ -46,14 +48,14 @@ async function main() {
     let index = Number(process.env.JOB_COMPLETION_INDEX);
 
     const crawlFile = `/home/pptruser/data/job_${jobId}/crawl_inputs/crawl_input_${index}.json`;
-    if (!fs.existsSync(crawlFile)) {
+    if (!existsSync(crawlFile)) {
       log.strError(`Could not find crawl file at ${crawlFile}`);
       process.exit(ExitCodes.INPUT_ERROR);
     }
-    let raw = fs.readFileSync(crawlFile).toString();
+    let raw = (await fs.readFile(crawlFile)).toString();
 
     // Parse the crawl message, set up logger
-    let validated = validateCrawlSpec(JSON.parse(raw));
+    let validated = await validateCrawlSpec(JSON.parse(raw));
     if (!validated) {
       log.strError('Crawl flags did not pass validation');
       process.exit(ExitCodes.INPUT_ERROR);
@@ -69,7 +71,7 @@ async function main() {
       password: process.env.PG_PASSWORD,
       database: process.env.PG_DATABASE
     };
-    const db = await DbClient.initialize(pgConf);
+    let db = await DbClient.initialize(pgConf);
 
     // Early exit if crawl is already complete
     if (flags.resumeIfAble && flags.crawlName) {
@@ -85,13 +87,13 @@ async function main() {
 
     // If loading a profile, check if profile directory exists and create an empty
     // directory if not.
-    if (flags.profileOptions.useExistingProfile && !fs.existsSync(flags.profileOptions.profileDir)) {
-      fs.mkdirSync(flags.profileOptions.profileDir, { recursive: true });
+    if (flags.profileOptions.useExistingProfile && !existsSync(flags.profileOptions.profileDir)) {
+      await fs.mkdir(flags.profileOptions.profileDir, { recursive: true });
     }
 
     // If writing a profile to a different location than it is read,
     // check to make sure it won't overwrite anything
-    if (flags.profileOptions.writeProfile && fs.existsSync(flags.profileOptions.newProfileDir)) {
+    if (flags.profileOptions.writeProfile && existsSync(flags.profileOptions.newProfileDir)) {
       log.strError(`${flags.profileOptions.newProfileDir} already exists, this would be overwritten`);
       process.exit(ExitCodes.INPUT_ERROR);
     }
@@ -99,15 +101,15 @@ async function main() {
     if (flags.profileOptions.sshHost && flags.profileOptions.sshRemotePort && flags.profileOptions.sshRemotePort) {
       log.info('Setting up SSH tunnel');
       // Copy SSH keys to container home dir, set permissions to prevent errors
-      fs.mkdirSync('/home/pptruser/.ssh', { recursive: true });
-      fs.chmodSync('/home/pptruser/.ssh', 0o700);
-      fs.copyFileSync(flags.profileOptions.sshKey, '/home/pptruser/.ssh/id_rsa');
-      fs.copyFileSync(`${flags.profileOptions.sshKey}.pub`, '/home/pptruser/.ssh/id_rsa.pub');
-      fs.chmodSync('/home/pptruser/.ssh/id_rsa', 0o600);
-      fs.chmodSync('/home/pptruser/.ssh/id_rsa.pub', 0o644);
-      fs.chownSync('/home/pptruser/.ssh', 999, 999);
-      fs.chownSync('/home/pptruser/.ssh/id_rsa', 999, 999);
-      fs.chownSync('/home/pptruser/.ssh/id_rsa.pub', 999, 999);
+      await fs.mkdir('/home/pptruser/.ssh', { recursive: true });
+      await fs.chmod('/home/pptruser/.ssh', 0o700);
+      await fs.copyFile(flags.profileOptions.sshKey, '/home/pptruser/.ssh/id_rsa');
+      await fs.copyFile(`${flags.profileOptions.sshKey}.pub`, '/home/pptruser/.ssh/id_rsa.pub');
+      await fs.chmod('/home/pptruser/.ssh/id_rsa', 0o600);
+      await fs.chmod('/home/pptruser/.ssh/id_rsa.pub', 0o644);
+      await fs.chown('/home/pptruser/.ssh', 999, 999);
+      await fs.chown('/home/pptruser/.ssh/id_rsa', 999, 999);
+      await fs.chown('/home/pptruser/.ssh/id_rsa.pub', 999, 999);
       try {
         let execResult = await execPromise(`ssh -f -N -o StrictHostKeyChecking=no -i /home/pptruser/.ssh/id_rsa -D 5001 -p ${flags.profileOptions.sshRemotePort} ${flags.profileOptions.sshHost}`);
         if (execResult.stderr) {
@@ -121,7 +123,7 @@ async function main() {
 
     if (flags.profileOptions.useExistingProfile) {
       log.info(`Copying profile from ${flags.profileOptions.profileDir} to container`);
-      fs.cpSync(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
+      await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
         { recursive: true });
     }
 
@@ -129,29 +131,29 @@ async function main() {
       // Filter for fs.cpSync. Ignores the Chrome profile singletons files
       // (which are symlinks), other symlinks, or files that disappear
       // since the command was invoked.
-      let filterInvalidFiles = (src: string, dst: string) => {
+      let filterInvalidFiles = async (src: string, dst: string) => {
         if (src == 'SingletonCookie' || src == 'SingletonLock' || src == 'SingletonSocket') {
           return false;
         }
-        if (!fs.existsSync(src)) {
+        if (!existsSync(src)) {
           return false;
         }
-        return !fs.lstatSync(src).isSymbolicLink();
+        return !(await fs.lstat(src)).isSymbolicLink();
       }
 
       if (!flags.profileOptions.newProfileDir) {
         log.info(`Writing profile to temp location (${flags.profileOptions.profileDir}-temp)`);
-        fs.cpSync('/home/pptruser/chrome_profile', `${flags.profileOptions.profileDir}-temp`, {
+        await fs.cp('/home/pptruser/chrome_profile', `${flags.profileOptions.profileDir}-temp`, {
           recursive: true,
           filter: filterInvalidFiles
         });
         log.info('Deleting old profile');
-        fs.rmSync(flags.profileOptions.profileDir, { recursive: true });
+        await fs.rm(flags.profileOptions.profileDir, { recursive: true });
         log.info(`Moving temp profile to original location (${flags.profileOptions.profileDir})`);
-        fs.renameSync(`${flags.profileOptions.profileDir}-temp`, flags.profileOptions.profileDir);
+        await fs.rename(`${flags.profileOptions.profileDir}-temp`, flags.profileOptions.profileDir);
       } else {
         log.info(`Writing profile to new location (${flags.profileOptions.newProfileDir})`);
-        fs.cpSync('/home/pptruser/chrome_profile', flags.profileOptions.newProfileDir, {
+        await fs.cp('/home/pptruser/chrome_profile', flags.profileOptions.newProfileDir, {
           recursive: true,
           filter: filterInvalidFiles
         });
@@ -194,6 +196,7 @@ async function main() {
       await saveProfile();
       if (shouldCheckpoint) {
         // Update last checkpoint index with the final profile save
+        db = await DbClient.initialize(pgConf);
         const crawlIdQuery = await db.postgres.query('SELECT id FROM crawl WHERE name=$1', [flags.crawlName]);
         if (crawlIdQuery.rowCount == 0) {
           log.warning(`Could not find id for crawl ${flags.crawlName}, can't update checkpoint index (should not reach here).`)
