@@ -20,17 +20,22 @@ interface Log {
 }
 
 declare global {
-  var LOG_FILE: string;
+  var LOG_FILE_STREAM: fs.WriteStream | undefined;
   var LOG_LEVEL: LogLevel;
 }
 
-globalThis.LOG_FILE = '';
+globalThis.LOG_FILE_STREAM = undefined;
 globalThis.LOG_LEVEL = LogLevel.INFO;
 
 // Call to set where log files should be stored - directory structure and
 // name are based on the job id and crawl name. If not called, no logs will
 // be written to file.
 export function setLogDirFromFlags(crawlerFlags: CrawlerFlags) {
+  if (LOG_FILE_STREAM) {
+    console.log('Log file already open');
+    return;
+  }
+
   let logDirSegments = [crawlerFlags.outputDir, 'logs'];
   if (crawlerFlags.jobId) {
     logDirSegments.push(`job_${crawlerFlags.jobId.toString()}`);
@@ -39,7 +44,9 @@ export function setLogDirFromFlags(crawlerFlags: CrawlerFlags) {
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
   }
-  globalThis.LOG_FILE = path.resolve(logDir, `${crawlerFlags.crawlName}.txt`);
+  let logFile = path.resolve(logDir, `${crawlerFlags.crawlName}.txt`);
+  console.log('Opening log file at ' + logFile);
+  globalThis.LOG_FILE_STREAM = fs.createWriteStream(logFile, { flags: 'a' })
   globalThis.LOG_LEVEL = crawlerFlags.logLevel ? crawlerFlags.logLevel : LogLevel.INFO;
 }
 
@@ -50,10 +57,11 @@ export function error(e: Error, url?: string) {
     message: `${url? url + ': ': ''}${e.message}`,
     stack: e.stack
   }
+  let logStr = formatLog(log);
   if (LOG_LEVEL >= LogLevel.ERROR) {
-    printLog(log, chalk.red);
+    printLog(logStr, chalk.red);
   }
-  writeLog(log);
+  writeLog(logStr);
 }
 
 export function strError(message: string) {
@@ -62,10 +70,11 @@ export function strError(message: string) {
     level: 'ERROR',
     message: message
   }
+  let logStr = formatLog(log);
   if (LOG_LEVEL >= LogLevel.ERROR) {
-    printLog(log, chalk.red);
+    printLog(logStr, chalk.red);
   }
-  writeLog(log);
+  writeLog(logStr);
 }
 
 export function warning(message: string) {
@@ -74,10 +83,11 @@ export function warning(message: string) {
     level: 'WARNING',
     message: message
   }
+  let logStr = formatLog(log);
   if (LOG_LEVEL >= LogLevel.WARNING) {
-    printLog(log, chalk.yellow);
+    printLog(logStr, chalk.yellow);
   }
-  writeLog(log);
+  writeLog(logStr);
 }
 
 export function info(message: string) {
@@ -86,10 +96,11 @@ export function info(message: string) {
     level: 'INFO',
     message: message
   }
+  let logStr = formatLog(log);
   if (LOG_LEVEL >= LogLevel.INFO) {
-    printLog(log, chalk.whiteBright);
+    printLog(logStr, chalk.whiteBright);
   }
-  writeLog(log);
+  writeLog(logStr);
 }
 
 export function debug(message: string) {
@@ -99,8 +110,9 @@ export function debug(message: string) {
     message: message
   }
   if (LOG_LEVEL >= LogLevel.DEBUG) {
-    printLog(log, chalk.whiteBright.dim);
-    writeLog(log);
+    let logStr = formatLog(log);
+    printLog(logStr, chalk.whiteBright.dim);
+    writeLog(logStr);
   }
 }
 
@@ -111,19 +123,15 @@ export function verbose(message: string) {
     message: message
   }
   if (LOG_LEVEL >= LogLevel.VERBOSE) {
-    printLog(log, chalk.white.dim);
-    writeLog(log);
+    let logStr = formatLog(log);
+    printLog(logStr, chalk.white.dim);
+    writeLog(logStr);
   }
 }
 
-function writeLog(l: Log) {
-  const log = formatLog(l);
-  if (LOG_FILE.length > 0) {
-    fs.writeFile(LOG_FILE, log + '\n', { flag: 'a' }, (err) => {
-      if (err) {
-        console.log(err);
-      }
-    });
+function writeLog(l: string) {
+  if (LOG_FILE_STREAM) {
+    LOG_FILE_STREAM.write(l + '\n');
   }
 }
 
@@ -131,6 +139,6 @@ function formatLog(l: Log) {
   return `[${l.level} ${l.ts}] ${l.message}${l.stack ? '\n' + l.stack : ''}`;
 }
 
-function printLog(l: Log, color: ChalkInstance) {
-  console.log(color(formatLog(l)));
+function printLog(l: string, color: ChalkInstance) {
+  console.log(color(l));
 }
