@@ -6,7 +6,8 @@ import * as log from '../util/log.js';
 import { createAsyncTimeout, sleep } from '../util/timeout.js';
 import DbClient from '../util/db.js';
 import urlToPathSafeStr from '../util/urlToPathSafeStr.js';
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync } from 'fs';
 import getCrawlOutputDirectory from '../util/getCrawlOutputDirectory.js';
 
 export enum PageType {
@@ -70,8 +71,8 @@ export async function scrapePage(page: Page, metadata: ScrapePageMetadata) {
 
       // Get the full path
       let fullPagesDir = path.join(FLAGS.outputDir, pagesDir);
-      if (!fs.existsSync(fullPagesDir)) {
-        fs.mkdirSync(fullPagesDir, { recursive: true });
+      if (!existsSync(fullPagesDir)) {
+        await fs.mkdir(fullPagesDir, { recursive: true });
       }
 
       // Scrape the page
@@ -112,7 +113,7 @@ async function scrapePageContent(
     // Save HTML content
     const html = await page.content();
     const htmlFile = path.join(outputDir, filename + '_document.html');
-    fs.writeFileSync(htmlFile, html);
+    await fs.writeFile(htmlFile, html);
 
     // Save page snapshot
     // const cdp = await page.target().createCDPSession();
