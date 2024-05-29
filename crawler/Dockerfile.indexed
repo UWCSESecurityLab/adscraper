@@ -5,6 +5,11 @@ FROM ghcr.io/puppeteer/puppeteer:21.6.0
 USER root
 RUN apt-get update && apt-get install -y curl ca-certificates amqp-tools jq rsync
 
+# Add Tini
+ENV TINI_VERSION v0.19.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /tini
+RUN chmod +x /tini
+
 USER pptruser
 
 COPY --chown=pptruser:pptruser package*.json .
@@ -13,4 +18,5 @@ COPY --chown=pptruser:pptruser . .
 RUN npx tsc \
     && npx typescript-json-schema ./tsconfig.json CrawlerFlags > ./gen/crawlerFlagsSchema.json
 
+ENTRYPOINT ["/tini", "--"]
 CMD ["node", "gen/k8s-indexed-job-worker.js"]
