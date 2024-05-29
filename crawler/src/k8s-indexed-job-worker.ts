@@ -17,6 +17,40 @@ import * as log from './util/log.js';
 let execPromise = util.promisify(exec);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
 
+enum WorkerState {
+  PRE_CRAWL,
+  CRAWLING,
+  POST_CRAWL
+}
+let workerState = WorkerState.PRE_CRAWL;
+let terminated = false;
+let interrupted = false;
+
+async function handleTermination(signal: number) {
+  let exitCode = 128 + signal;
+  if (workerState == WorkerState.PRE_CRAWL) {
+    log.info('Crawl has not started, exiting immediately');
+    process.exit(exitCode);
+  } else if (workerState == WorkerState.CRAWLING) {
+    log.info('Crawl in progress, closing browser and waiting for exception...');
+    await BROWSER.close();
+  } else {
+    log.info('Crawl has completed, doing nothing and waiting for post-crawl cleanup...');
+  }
+}
+
+process.on('SIGINT', async () => {
+  log.info('SIGINT received');
+  interrupted = true;
+  await handleTermination(2);
+});
+
+process.on('SIGTERM', async () => {
+  log.info('SIGTERM received');
+  terminated = true;
+  await handleTermination(15);
+});
+
 async function validateCrawlSpec(input: any) {
   const buf = await fs.readFile(path.join(__dirname, 'crawlerFlagsSchema.json'));
   const schema = JSON.parse(buf.toString());
@@ -63,8 +97,7 @@ async function main() {
     let flags: crawler.CrawlerFlags = validated;
     log.setLogDirFromFlags(flags);
 
-    log.info('------------------------------------------------------------------\n' +
-        `Starting new crawl task in job ${process.env.JOB_ID} with completion index ${process.env.JOB_COMPLETION_INDEX}`);
+    log.info(`Starting new crawl task in job ${process.env.JOB_ID} with completion index ${process.env.JOB_COMPLETION_INDEX}`);
     log.info(JSON.stringify(flags, undefined, 2));
 
     // Set up database connection
@@ -168,11 +201,14 @@ async function main() {
     let error: Error | undefined = undefined;
     let shouldCheckpoint = flags.profileOptions.writeProfile && flags.crawlOptions.checkpointFreq;
     try {
-      log.info('Running crawler...')
+      log.info('Running crawler...');
+      workerState = WorkerState.CRAWLING;
       await crawler.crawl(flags, pgConf, shouldCheckpoint ? saveProfile : undefined);
+      workerState = WorkerState.POST_CRAWL;
       log.info('Crawl succeeded');
       crawlSuccess = true;
     } catch (e: any) {
+      workerState = WorkerState.POST_CRAWL;
       log.strError('Crawl failed due to exception:');
       if (e instanceof Error) {
         log.error(e);
@@ -210,6 +246,15 @@ async function main() {
           log.info('Successfully saved profile after crawl');
         }
       }
+    }
+
+    if (terminated) {
+      log.info(`Container exiting due to SIGTERM`);
+      process.exit(128 + 15);
+    }
+    if (interrupted) {
+      log.info(`Container exiting due to SIGINT`);
+      process.exit(128 + 2);
     }
 
     if (!crawlSuccess) {

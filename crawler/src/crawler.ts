@@ -294,23 +294,6 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
     executablePath: FLAGS.chromeOptions.executablePath
   });
 
-  // TODO: move handling of SIGINT and SIGTERM out of crawler and into
-  // the container run scripts. This works for now because it triggers and
-  // exception that is handled by those scripts, but ideally those scripts
-  // should handle the signals directly.
-  // Problem: we can't interrupt the crawl loop directly from the signal
-  // handler. Workaround is to close the browser, and let the crawl loop
-  // throw an exception.
-  process.on('SIGINT', async () => {
-    log.info('SIGINT received, closing browser...');
-    await BROWSER.close();
-  });
-
-  process.on('SIGTERM', async () => {
-    log.info('SIGTERM received, closing browser...');
-    await BROWSER.close();
-  });
-
   const version = await BROWSER.version();
   log.info('Running ' + version);
 
@@ -448,7 +431,14 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
         } catch (e: any) {
           log.error(e, seedPage.url());
         } finally {
-          await seedPage.close();
+          try {
+            await Promise.race([
+              seedPage.close(),
+              createAsyncTimeout('Timed out closing page', 30000)
+            ])
+          } catch (e) {
+            throw e;
+          }
         }
       }
       await db.postgres.query('UPDATE crawl SET completed=TRUE, completed_time=$1 WHERE id=$2', [new Date(), CRAWL_ID]);
