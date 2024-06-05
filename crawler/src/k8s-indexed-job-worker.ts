@@ -237,13 +237,13 @@ async function main() {
       if (shouldCheckpoint) {
         // Update last checkpoint index with the final profile save
         db = await DbClient.initialize(pgConf);
-        const crawlIdQuery = await db.postgres.query('SELECT id FROM crawl WHERE name=$1', [flags.crawlName]);
+        const crawlIdQuery = await db.postgres.query('SELECT id, crawl_list_current_index FROM crawl WHERE name=$1', [flags.crawlName]);
         if (crawlIdQuery.rowCount == 0) {
           log.warning(`Could not find id for crawl ${flags.crawlName}, can't update checkpoint index (should not reach here).`)
         } else {
           await db.postgres.query(`UPDATE crawl SET last_checkpoint_index=crawl_list_current_index WHERE id=$1`,
             [crawlIdQuery.rows[0].id]);
-          log.info('Successfully saved profile after crawl');
+            log.info(`Successfully saved end-of-crawl checkpoint at index ${crawlIdQuery.rows[0].crawl_list_current_index}`);
         }
       }
     }

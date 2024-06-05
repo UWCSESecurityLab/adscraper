@@ -421,6 +421,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                 }
               }
             } catch (e: any) {
+              log.strError('Caught exception in inner crawl loop and timeout block');
               log.error(e, seedPage.url());
             } finally {
               clearTimeout(urlTimeoutId);
@@ -429,14 +430,16 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
           await Promise.race([_crawl, urlTimeout]);
           await db.postgres.query('UPDATE crawl SET crawl_list_current_index=$1 WHERE id=$2', [i + 1, CRAWL_ID]);
         } catch (e: any) {
+          log.strError('Caught exception in site timeout promise race');
           log.error(e, seedPage.url());
         } finally {
           try {
-            await Promise.race([
-              seedPage.close(),
-              createAsyncTimeout('Timed out closing page', 30000)
-            ])
+            log.info('Closing tab');
+            let [pageCloseTimeout, pageCloseTimeoutId] = createAsyncTimeout('Timed out attempting closing tab after crawl', 120000)
+            await Promise.race([seedPage.close(), pageCloseTimeout]);
+            clearTimeout(pageCloseTimeoutId);
           } catch (e) {
+            log.strError('Caught exception while closing tab');
             throw e;
           }
         }
@@ -445,11 +448,15 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
       return;
     })();
     await Promise.race([_crawlLoop, overallTimeout]);
+    log.info('Crawl loop completed');
     if (BROWSER.connected) {
+      log.info('Browser still connected, closing browser');
       await BROWSER.close();
     }
   } catch (e) {
+    log.strError('Caught exeception in crawl timeout promise race');
     if (BROWSER.connected) {
+      log.info('Browser still connected, closing browser');
       await BROWSER.close();
     }
     throw e;
@@ -599,6 +606,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     // await page.setRequestInterception(false);
     return pageId;
   } catch (e) {
+    log.strError('Caught exception in loadAndHandlePage');
     if (e instanceof Error) {
       await db.updatePage(pageId, { error: e.message });
     } else {
