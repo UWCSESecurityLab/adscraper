@@ -28,6 +28,7 @@
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "rss-parser": "^3.13.0",
     "sharp": "^0.33.1",
+    "tar": "^6.2.1",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
@@ -35,9 +36,10 @@
     "@types/cli-progress": "^3.11.0",
     "@types/command-line-args": "^5.2.0",
     "@types/command-line-usage": "^5.0.2",
-    "@types/node": "^20.10.5",
+    "@types/node": "^20.14.2",
     "@types/pg": "^8.10.2",
     "@types/source-map-support": "^0.5.7",
+    "@types/tar": "^6.1.13",
     "@types/uuid": "^9.0.2",
     "@types/xml2js": "^0.4.11",
     "source-map-support": "^0.5.21",

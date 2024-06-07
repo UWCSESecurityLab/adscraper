@@ -47,6 +47,12 @@ interface ProfileOptions {
   // |crawls.profileDir| if not.
   writeProfileAfterCrawl?: boolean;
 
+  // Specifies whether the profile should be compressed before writing it to
+  // the persistent storage location. This can reduce disk usage and
+  // I/O time when storing profiles on network storage locations, at the cost of
+  // CPU in the crawler container.
+  compressProfileBeforeWrite?: boolean;
+
   // If writeProfileAfterCrawl is set to true, crawler can be set to
   // periodically save the profile during the crawl, to avoid losing progress
   // if the crawler crashes during a long crawl. This sets the frequency

@@ -13,6 +13,7 @@ import * as crawler from './crawler.js';
 import DbClient from './util/db.js';
 import { ExitCodes, InputError, NonRetryableError } from './util/errors.js';
 import * as log from './util/log.js';
+import * as tar from 'tar';
 
 let execPromise = util.promisify(exec);
 const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
@@ -135,6 +136,20 @@ async function main() {
       process.exit(ExitCodes.INPUT_ERROR);
     }
 
+    if (flags.profileOptions.writeProfile && flags.profileOptions.compressProfileBeforeWrite) {
+      if (flags.profileOptions.newProfileDir) {
+        if (!flags.profileOptions.newProfileDir.endsWith('.tar.gz')) {
+          log.strError('newProfileDir must end in .tar.gz if compressProfileBeforeWrite is true');
+          process.exit(ExitCodes.INPUT_ERROR);
+        }
+      } else {
+        if (!flags.profileOptions.profileDir.endsWith('.tar.gz')) {
+          log.strError('profileDir must end in .tar.gz if compressProfileBeforeWrite is true');
+          process.exit(ExitCodes.INPUT_ERROR);
+        }
+      }
+    }
+
     if (flags.profileOptions.sshHost && flags.profileOptions.sshRemotePort && flags.profileOptions.sshRemotePort) {
       log.info('Setting up SSH tunnel');
       // Copy SSH keys to container home dir, set permissions to prevent errors
@@ -159,9 +174,19 @@ async function main() {
     }
 
     if (flags.profileOptions.useExistingProfile) {
-      log.info(`Copying profile from ${flags.profileOptions.profileDir} to container`);
-      await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
-        { recursive: true });
+      if (flags.profileOptions.profileDir.endsWith('.tar.gz')) {
+        log.info(`Copying compressed profile from ${flags.profileOptions.profileDir} to container`);
+        await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile.tar.gz');
+        log.info(`Extracting profile`)
+        await tar.x({
+          file: '/home/pptruser/chrome_profile.tar.gz',
+          cwd: '/home/pptruser',
+        });
+      } else {
+        log.info(`Copying profile from ${flags.profileOptions.profileDir} to container`);
+        await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
+          { recursive: true });
+      }
     }
 
     async function saveProfile() {
@@ -178,19 +203,30 @@ async function main() {
         return !(await fs.lstat(src)).isSymbolicLink();
       }
 
+      let containerProfileLoc;
+      if (flags.profileOptions.compressProfileBeforeWrite) {
+        await tar.c({
+          gzip: true,
+          file: '/home/pptruser/chrome_profile.tar.gz'
+        }, ['/home/pptruser/chrome_profile']);
+        containerProfileLoc = '/home/pptruser/chrome_profile.tar.gz';
+      } else {
+        containerProfileLoc = '/home/pptruser/chrome_profile';
+      }
+
       if (!flags.profileOptions.newProfileDir) {
-        log.info(`Writing profile to temp location (${flags.profileOptions.profileDir}-temp)`);
-        await fs.cp('/home/pptruser/chrome_profile', `${flags.profileOptions.profileDir}-temp`, {
+        log.info(`Writing profile to temp location (tmp-${flags.profileOptions.profileDir})`);
+        await fs.cp(containerProfileLoc, `tmp-${flags.profileOptions.profileDir}`, {
           recursive: true,
           filter: filterInvalidFiles
         });
         log.info('Deleting old profile');
         await fs.rm(flags.profileOptions.profileDir, { recursive: true });
         log.info(`Moving temp profile to original location (${flags.profileOptions.profileDir})`);
-        await fs.rename(`${flags.profileOptions.profileDir}-temp`, flags.profileOptions.profileDir);
+        await fs.rename(`tmp-${flags.profileOptions.profileDir}`, flags.profileOptions.profileDir);
       } else {
         log.info(`Writing profile to new location (${flags.profileOptions.newProfileDir})`);
-        await fs.cp('/home/pptruser/chrome_profile', flags.profileOptions.newProfileDir, {
+        await fs.cp(containerProfileLoc, flags.profileOptions.newProfileDir, {
           recursive: true,
           filter: filterInvalidFiles
         });
@@ -199,11 +235,19 @@ async function main() {
 
     let crawlSuccess = false;
     let error: Error | undefined = undefined;
+
     let shouldCheckpoint = flags.profileOptions.writeProfile && flags.crawlOptions.checkpointFreq;
+    let saveProfileCheckpoint = async () => {
+      log.info('Closing browser for checkpoint...');
+      await BROWSER.close();
+      await saveProfile();
+      globalThis.BROWSER = await crawler.launchBrowser(flags);
+    }
+
     try {
       log.info('Running crawler...');
       workerState = WorkerState.CRAWLING;
-      await crawler.crawl(flags, pgConf, shouldCheckpoint ? saveProfile : undefined);
+      await crawler.crawl(flags, pgConf, shouldCheckpoint ? saveProfileCheckpoint : undefined);
       workerState = WorkerState.POST_CRAWL;
       log.info('Crawl succeeded');
       crawlSuccess = true;

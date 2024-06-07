@@ -276,26 +276,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
   }
 
   // Open browser
-  log.info('Launching browser...');
-
-  puppeteerExtra.default.use(StealthPlugin())
-
-  let chromeArgs: string[] = ['--disable-dev-shm-usage'];
-  if (FLAGS.chromeOptions.proxyServer) {
-    chromeArgs.push(`--proxy-server=${FLAGS.chromeOptions.proxyServer}`);
-  }
-
-  globalThis.BROWSER = await puppeteerExtra.default.launch({
-    args: chromeArgs,
-    defaultViewport: VIEWPORT,
-    headless: FLAGS.chromeOptions.headless,
-    handleSIGINT: false,
-    userDataDir: FLAGS.chromeOptions.profileDir,
-    executablePath: FLAGS.chromeOptions.executablePath
-  });
-
-  const version = await BROWSER.version();
-  log.info('Running ' + version);
+  globalThis.BROWSER = await launchBrowser(FLAGS);
 
   // Set up overall timeout, race with main loop
   let [overallTimeout, overallTimeoutId] = createAsyncTimeout<void>('Overall crawl timeout reached', CRAWL_TIMEOUT);
@@ -640,6 +621,30 @@ async function scrollDownPage(page: Page) {
     // scrollHeight = await page.evaluate(() => document.body.scrollHeight);
     i += 1;
   }
+}
+
+// Launches the browser with the given flags. Called automatically by
+// crawl(), so normally you do not need to call this, but it can be called
+// directly if the browser needs to be restarted externally
+// (e.g. within the checkpoint function).
+export async function launchBrowser(flags: CrawlerFlags) {
+  log.info('Launching browser...');
+  puppeteerExtra.default.use(StealthPlugin())
+  let chromeArgs: string[] = ['--disable-dev-shm-usage'];
+  if (flags.chromeOptions.proxyServer) {
+    chromeArgs.push(`--proxy-server=${flags.chromeOptions.proxyServer}`);
+  }
+  let browser = await puppeteerExtra.default.launch({
+    args: chromeArgs,
+    defaultViewport: VIEWPORT,
+    headless: flags.chromeOptions.headless,
+    handleSIGINT: false,
+    userDataDir: flags.chromeOptions.profileDir,
+    executablePath: flags.chromeOptions.executablePath
+  });
+  const version = await browser.version();
+  log.info('Running ' + version);
+  return browser;
 }
 
 function randrange(low: number, high: number): number {
