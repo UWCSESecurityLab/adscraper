@@ -236,9 +236,16 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
     if (crawlExists && FLAGS.resumeIfAble) {
       globalThis.CRAWL_ID = prevCrawl.rows[0].id;
       // Check that the crawl list name is the same
-      if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
-        log.strError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
-        throw new InputError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+      if (crawlListFile.length != 0) {
+        if (path.basename(prevCrawl.rows[0].crawl_list) != path.basename(crawlListFile)) {
+          log.strError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+          throw new InputError(`Crawl list file provided does not the have same name as the original crawl. Expected: ${path.basename(prevCrawl.rows[0].crawl_list)}, actual: ${path.basename(crawlListFile)}`);
+        }
+      } else {
+        if (prevCrawl.rows[0].crawl_list != FLAGS.url) {
+          log.strError(`URL provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.url}`);
+          throw new InputError(`URL provided does not the have same name as the original crawl. Expected: ${prevCrawl.rows[0].crawl_list}, actual: ${FLAGS.url}`);
+        }
       }
       // Check that the crawl list length is the same
       if (prevCrawl.rows[0].crawl_list_length != crawlList.length) {
