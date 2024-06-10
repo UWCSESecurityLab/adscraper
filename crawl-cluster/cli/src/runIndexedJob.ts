@@ -37,12 +37,6 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     type: String,
     description: 'JSON file containing the Postgres connection parameters: host, port, database, user, password.',
   },
-  {
-    name: 'node_name',
-    alias: 'n',
-    type: String,
-    description: '(Optional) name of Kubernetes node the job should be restricted to. If not provided, workers can be scheduled on any node with the label "crawler=true".'
-  }
 ];
 
 const options = commandLineArgs(optionsDefinitions)._all;
@@ -115,7 +109,8 @@ async function main() {
         parallelism: jobSpec.maxWorkers,
         completions: crawlInputs.length,
         jobId: jobId,
-        jobName: jobSpec.jobName
+        jobName: jobSpec.jobName,
+        nodeName: jobSpec.nodeName
       });
 
       // Submit the job to cluster
