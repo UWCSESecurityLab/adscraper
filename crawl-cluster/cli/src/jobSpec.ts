@@ -16,6 +16,11 @@ export default interface JobSpec {
   // Max number of Chromium instances to run in parallel
   maxWorkers: number;
 
+  // (Optional) The name of a Kubernetes node that workers are restricted to.
+  // If not provided, workers will be scheduled on any node with the label
+  // "crawler=true".
+  nodeName?: string;
+
   // URLs to crawl in this job.
   // If profileOptions.profileMode is "isolated", provide a path to a file containing URLs,
   // one line per URL.

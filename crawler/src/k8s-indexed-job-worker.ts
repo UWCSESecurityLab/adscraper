@@ -126,6 +126,7 @@ async function main() {
     // If loading a profile, check if profile directory exists and create an empty
     // directory if not.
     if (flags.profileOptions.useExistingProfile && !existsSync(flags.profileOptions.profileDir)) {
+      log.warning(`Profile directory ${flags.profileOptions.profileDir} does not exist, creating empty directory`)
       await fs.mkdir(flags.profileOptions.profileDir, { recursive: true });
     }
 

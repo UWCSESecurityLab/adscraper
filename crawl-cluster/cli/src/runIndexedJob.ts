@@ -38,10 +38,10 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     description: 'JSON file containing the Postgres connection parameters: host, port, database, user, password.',
   },
   {
-    name: 'amqp_broker',
-    alias: 'a',
+    name: 'node_name',
+    alias: 'n',
     type: String,
-    description: 'Host and port of the AMQP broker.'
+    description: '(Optional) name of Kubernetes node the job should be restricted to. If not provided, workers can be scheduled on any node with the label "crawler=true".'
   }
 ];
 
@@ -132,7 +132,7 @@ async function main() {
   }
 }
 
-async function generateK8sJob(options: {parallelism: number, completions: number, jobId: number, jobName: string}) {
+async function generateK8sJob(options: {parallelism: number, completions: number, jobId: number, jobName: string, nodeName?: string}) {
   let job = k8s.loadYaml(fs.readFileSync('../config/indexed-job.yaml').toString()) as k8s.V1Job;
   job.spec!.parallelism = options.parallelism;
   job.spec!.completions = options.completions;
@@ -141,6 +141,9 @@ async function generateK8sJob(options: {parallelism: number, completions: number
   job.spec!.template.metadata!.name = `${options.jobName.toLowerCase()}`;
   job.spec!.template.metadata!.labels!.jobgroup = `${options.jobName.toLowerCase()}`;
   job.spec!.template!.spec!.containers![0].env!.push({name: 'JOB_ID', value: options.jobId.toString()});
+  if (options.nodeName) {
+    job.spec!.template!.spec!.nodeName = options.nodeName;
+  }
   return job;
 }
 
