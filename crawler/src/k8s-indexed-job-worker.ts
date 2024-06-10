@@ -185,8 +185,10 @@ async function main() {
         });
       } else {
         log.info(`Copying profile from ${flags.profileOptions.profileDir} to container`);
-        await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile',
-          { recursive: true });
+        await fs.cp(flags.profileOptions.profileDir, '/home/pptruser/chrome_profile', {
+          recursive: true,
+          mode: fs.constants.COPYFILE_FICLONE
+        });
       }
     }
 
