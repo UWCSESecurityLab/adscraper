@@ -71,6 +71,8 @@ export function validateJobSpec(input: any) {
   throw new Error(vRes.errors.join('\n'));
 }
 
+let client: pg.Client;
+
 async function main() {
   try {
     // Validate input
@@ -80,7 +82,7 @@ async function main() {
 
     // Connect to postgres database
     const pgConf = JSON.parse(fs.readFileSync(options.pg_conf).toString());
-    const client = new pg.Client(pgConf);
+    client = new pg.Client(pgConf);
     await client.connect();
     console.log('Connected to Postgres');
 
@@ -223,7 +225,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
       "jobId": jobId,
       "crawlName": `${jobSpec.jobName}_url_${i}`,
       "outputDir": jobSpec.containerDataDir,
-      "resumeIfAble": false,
+      "resumeIfAble": true,
       "url": url,
       "chromeOptions": {
         "headless": 'new',
@@ -271,11 +273,19 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
       });
   }));
   for (let i = 0; i < urls.length; i++) {
+    let crawlName = `landing_page_for_ad_${adIds[i]}`;
+
+    let completedCrawl = await client.query('SELECT * FROM crawl WHERE name=$1 and completed=true', [crawlName]);
+    if (completedCrawl.rows.length > 0) {
+      console.log(`Crawl ${crawlName} already completed. Skipping.`);
+      continue;
+    }
+
     let message: CrawlerFlagsWithProfileHandling = {
       "jobId": jobId,
       "crawlName": `landing_page_for_ad_${adIds[i]}`,
       "outputDir": jobSpec.containerDataDir,
-      "resumeIfAble": false,
+      "resumeIfAble": true,
       "url": urls[i],
       "adId": adIds[i],
       "chromeOptions": {
