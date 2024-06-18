@@ -10,7 +10,7 @@
   "author": "Eric Zeng",
   "license": "MIT",
   "dependencies": {
-    "@kubernetes/client-node": "^0.18.1",
+    "@kubernetes/client-node": "^0.21.0",
     "ads-crawler": "file:../../crawler",
     "amqplib": "^0.10.3",
     "cli-progress": "^3.12.0",
