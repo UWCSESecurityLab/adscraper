@@ -51,21 +51,25 @@ export interface AdDomain {
 
 export interface Page {
   timestamp: Date,
-  url: string,
-  crawl_list_url: string,
+  url?: string,
+  original_url: string,
   html?: string
   screenshot?: string,
   screenshot_host?: string,
   page_type: string,
-  job_id: number,
+  job_id?: number,
   crawl_id: number,
   referrer_page?: number,
   referrer_page_url?: string,
-  referrer_ad?: number
+  referrer_ad?: number,
+  error?: string,
+  reload?: number
 }
 
 export interface WebRequest {
   timestamp: Date,
+  job_id?: number,
+  crawl_id: number,
   parent_page: number,
   initiator: string,
   target_url: string,
@@ -204,7 +208,7 @@ export default class DbClient {
     return result.rows[0].id as number;
   }
 
-  async updateAd(id: number, ad: Ad) {
+  async updateAd(id: number, ad: Partial<Ad>) {
     return this.updateById({
       table: 'ad',
       id: id,
@@ -219,6 +223,14 @@ export default class DbClient {
       data: page
     }) as number;
     return pageId;
+  }
+
+  async updatePage(pageId: number, page: Partial<Page>) {
+    await this.updateById({
+      table: 'page',
+      id: pageId,
+      data: page
+    });
   }
 
   async insertAdDomain(adDomain: AdDomain) {

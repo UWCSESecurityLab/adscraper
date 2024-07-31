@@ -1,0 +1,34 @@
+{
+  "name": "crawl-coordinator-v2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "gen/runJob.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc && npx typescript-json-schema src/jobSpec.ts JobSpec > gen/jobSpecSchema.json"
+  },
+  "author": "Eric Zeng",
+  "license": "MIT",
+  "dependencies": {
+    "@kubernetes/client-node": "^0.21.0",
+    "ads-crawler": "file:../../crawler",
+    "amqplib": "^0.10.3",
+    "cli-progress": "^3.12.0",
+    "command-line-args": "^5.2.1",
+    "command-line-usage": "^7.0.1",
+    "csv-parser": "^3.0.0",
+    "express": "^4.18.2",
+    "job-spec": "file:../../job-spec",
+    "jsonschema": "^1.4.1",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.10.1",
+    "@types/cli-progress": "^3.11.5",
+    "@types/command-line-args": "^5.2.3",
+    "@types/command-line-usage": "^5.0.4",
+    "@types/express": "^4.17.17",
+    "@types/pg": "^8.10.2",
+    "typescript-json-schema": "^0.60.0"
+  }
+}

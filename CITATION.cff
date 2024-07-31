@@ -1,0 +1,16 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: "adscraper: A Web Crawler for Measuring Online Ad Content"
+message: >-
+  If you used adscraper in your research, please cite this
+  repository!
+type: software
+authors:
+  - given-names: Eric Zeng
+    email: ericzeng@cmu.edu
+    affiliation: Carnegie Mellon University
+repository-code: 'https://github.com/UWCSESecurityLab/adscraper'
+abstract: A web crawler for scraping online ad content
+license: MIT

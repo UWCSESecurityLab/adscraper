@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adscraper-job
+spec:
+  # These values will be set automatically by runJob.ts
+  # parallelism: 4  # maxWorkers
+  # completions: 8  # Number of crawl jobs
+  template:
+    metadata:
+      name: adscraper-job
+    spec:
+      containers:
+        - name: crawler
+          image: docker.io/ezeng/adscraper:k8s-amqp-job-worker
+          imagePullPolicy: Always
+          resources:
+            requests:
+              memory: 2G
+              cpu: 1
+            # limits:
+              # memory: 4G
+              # cpu: 2
+          volumeMounts:
+          - mountPath: /home/pptruser/data
+            name: adscraper-storage
+          env:
+            - name: BROKER_URL
+              value: amqp://guest:guest@rabbitmq-service:5672
+            # The job id will be set automatically by runJob.ts
+            # - name: JOB_ID
+            #   value: 123
+            - name: PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: database
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: user
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: PG_HOST
+              value: postgres.default.svc.cluster.local
+            - name: PG_PORT
+              value: "5432"
+            - name: PUPPETEER_CACHE_DIR
+              value: /home/pptruser/.cache/puppeteer
+      nodeSelector:
+        crawler: "true"
+      restartPolicy: Never
+      securityContext:
+        capabilities:
+            add:
+            - SYS_ADMIN
+      # Set up your storage mount here
+      # volumes:
+      #   - name: adscraper-storage
+  backoffLimit: 100
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onExitCodes:
+        operator: In
+        values: [244]
+    - action: FailJob
+      onExitCodes:
+        operator: In
+        values: [242, 243, 245]

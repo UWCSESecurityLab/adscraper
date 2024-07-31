@@ -1,0 +1,27 @@
+{
+  "crawlName": "test_crawl",
+  "jobId": 1,
+  "outputDir": "/Users/ericzeng/data/adscraper-ads/",
+  "crawlListFile": "/Users/ericzeng/workspace/adscraper/crawl-cluster/cli/test-input/target_sites_1.txt",
+  "crawlListHasReferrerAds": false,
+  "chromeOptions": {
+    "headless": "new"
+  },
+  "crawlOptions": {
+    "shuffleCrawlList": false,
+    "findAndCrawlPageWithAds": false,
+    "findAndCrawlArticlePage": false
+  },
+  "scrapeOptions": {
+    "scrapeSite": false,
+    "scrapeAds": true,
+    "clickAds": "clickAndBlockLoad",
+    "screenshotAdsWithContext": false,
+    "captureThirdPartyRequests": true
+  },
+  "profileOptions": {
+    "useExistingProfile": true,
+    "writeProfile": true,
+    "profileDir": "/Users/ericzeng/data/adscraper-ads/profiles/oldProfile"
+  }
+}

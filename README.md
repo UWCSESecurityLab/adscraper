@@ -8,6 +8,7 @@ and saves the HTML content of each ad on the page.
   - [Introduction](#introduction)
     - [Research using adscraper](#research-using-adscraper)
     - [Warning: Research Code!](#warning-research-code)
+    - [Citations](#citations)
   - [Setup](#setup)
     - [Prerequisites](#prerequisites)
     - [Installation](#installation)
@@ -19,6 +20,7 @@ and saves the HTML content of each ad on the page.
     - [Advanced example: collecting ads and landing pages in separate profiles](#advanced-example-collecting-ads-and-landing-pages-in-separate-profiles)
     - [Resuming a failed crawl](#resuming-a-failed-crawl)
     - [Other command line options](#other-command-line-options)
+  - [Running distributed crawls](#running-distributed-crawls)
 
 ## Introduction
 
@@ -26,6 +28,11 @@ Adscraper is a Node.js script that uses the
 [puppeteer](https://github.com/puppeteer/puppeteer) library to automatically
 browse and collect ad data. You can use the crawler via the command line to
 crawl a single site, or you can use it as part of your own Node.JS script.
+
+The adscraper **crawl-cluster** uses Kubernetes to orchestrate
+crawls across multiple crawler instances. This allows multiple crawls to be
+queued and run in parallel across multiple nodes in a Kubernetes cluster.
+This useful if you plan to run many crawls across different browsing profiles.
 
 ### Research using adscraper
 
@@ -47,6 +54,19 @@ If you are running into issues with the code or documentation, please let us
 know by filing an issue or asking a question in the discussions. I will also
 accept pull requests for fixing bugs, doc bugs, or making the project more
 generally usable and configurable.
+
+### Citations
+If you used adscraper in your research project, please cite the repository
+using the following BibTeX:
+
+```bibtex
+@software{Eric_Zeng_adscraper,
+author = {Eric Zeng},
+license = {MIT},
+title = {{adscraper: A Web Crawler for Measuring Online Ad Content}},
+url = {https://github.com/UWCSESecurityLab/adscraper}
+}
+```
 
 ## Setup
 
@@ -307,3 +327,14 @@ For documentation of other command line options, use the `--help` option.
 ```sh
 node gen/crawler-cli.js --help
 ```
+
+
+## Running distributed crawls
+
+Need to run 10s, or even 100s of crawls with different profiles? Or do you need
+to parallelize crawls over thousands of URLs? The crawl-cluster directory
+contains a Kubernetes-based solution for running parallel crawls, distributed
+across multiple nodes.
+
+Refer to the documentation in [crawl-cluster/README.md](crawl-cluster/README.md)
+for more information.

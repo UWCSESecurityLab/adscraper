@@ -1,8 +1,14 @@
 import path from 'path';
 import DbClient from './db.js';
 
+// Returns a relative path to the output directory for the current crawl
+// If a crawl name is specified: <crawlName>
+// If no crawl name is specified: crawl_<crawlId>
+// If the crawl is part of a job: job_<jobId>/<crawlName>
+// If the crawl is part of a job and no crawl name is specified: job_<jobId>/crawl_<crawlId>
+// This path is relative to FLAGS.outputDir.
 export default async function getCrawlOutputDirectory(referrerAd?: number) {
-  const tokens = [FLAGS.outputDir];
+  const tokens = [];
   if (FLAGS.jobId) {
     tokens.push('job_' + FLAGS.jobId);
   }
@@ -21,7 +27,7 @@ export default async function getCrawlOutputDirectory(referrerAd?: number) {
 
   } else {
     crawlId = CRAWL_ID;
-    crawlName = FLAGS.name;
+    crawlName = FLAGS.crawlName;
   }
 
   if (crawlName) {

@@ -1,0 +1,36 @@
+{
+  "jobName": "testJob",
+  "dataDir": "/home/pptruser/data",
+  "maxWorkers": 2,
+  "profileOptions": {
+    "profileMode": "profile",
+    "useExistingProfile": true,
+    "writeProfileAfterCrawl": true
+  },
+  "crawlOptions": {
+    "shuffleCrawlList": false,
+    "findAndCrawlPageWithAds": false,
+    "findAndCrawlArticlePage": false
+  },
+  "scrapeOptions": {
+    "scrapeSite": false,
+    "scrapeAds": true,
+    "clickAds": "clickAndBlockLoad",
+    "screenshotAdsWithContext": false,
+    "captureThirdPartyRequests": true
+  },
+  "crawls": [
+    {
+      "crawlName": "profile1",
+      "crawlListFile": "/home/pptruser/data/test-input/target_sites_1.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profile1"
+    },
+    {
+      "crawlName": "profile2",
+      "crawlListFile": "/home/pptruser/data/test-input/target_sites_2.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profile2"
+    }
+  ]
+}

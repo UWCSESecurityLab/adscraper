@@ -1,11 +1,5 @@
 import { ElementHandle, JSHandle, Page } from 'puppeteer';
-import easylist from './easylist_selectors.json' assert { type: "json" };
-
-// Add any custom ad selectors here.
-const combinedSelectors = easylist.concat([
-  '.ob-widget',
-  '[id^="rc_widget"]',
-]);
+import adSelectors from './easylist_ad_selectors.json' assert { type: "json" };
 
 /**
  * Detects ads in the page using EasyList's CSS selectors, and returns an
@@ -14,7 +8,6 @@ const combinedSelectors = easylist.concat([
  * inside each other.
  */
 export async function identifyAdsInDOM(page: Page) {
-
   const ads: JSHandle<Element[]> =
     await page.evaluateHandle((selectors: string[]) => {
       try {
@@ -52,7 +45,7 @@ export async function identifyAdsInDOM(page: Page) {
       } catch (e) {
         throw e;
       }
-    }, combinedSelectors);
+    }, adSelectors);
 
   const numAds = await ads.evaluate((ads) => ads.length);
   const adHandles = new Set<ElementHandle>();

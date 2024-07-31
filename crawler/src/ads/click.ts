@@ -21,7 +21,7 @@ export function clickAd(
   page: Page,
   adId: number,
   pageId: number,
-  crawlListUrl: string) {
+  originalUrl: string) {
   return new Promise<void>(async (resolve, reject) => {
     // Create references to event listeners, so that we can remove them in the
     // catch block if this part crashes.
@@ -40,8 +40,13 @@ export function clickAd(
       // Set up a Chrome DevTools session (used later for popup interception)
       const cdp = await BROWSER.target().createCDPSession();
 
+      // Reference to timeouts, so that they can be cleaned up in the next function.
+      let timeout: NodeJS.Timeout, clickTimeout: NodeJS.Timeout;
+
       // Create a function to clean up everything we're about to add
       async function cleanUp() {
+        clearTimeout(timeout);
+        clearTimeout(clickTimeout);
         await cdp.send('Target.setAutoAttach', {
           waitForDebuggerOnStart: false,
           autoAttach: false,
@@ -57,7 +62,7 @@ export function clickAd(
 
       // Create timeout for processing overall clickthrough (including the landing page).
       // If it takes longer than this, abort handling this ad.
-      const timeout = setTimeout(async () => {
+      timeout = setTimeout(async () => {
         if (ctPage && !ctPage.isClosed()) {
           await ctPage?.close();
         }
@@ -67,7 +72,7 @@ export function clickAd(
 
       // Create timeout for the click. If the click fails to do anything,
       // abort handing this ad.
-      const clickTimeout = setTimeout(async () => {
+      clickTimeout = setTimeout(async () => {
         if (ctPage && !ctPage.isClosed()) {
           await ctPage?.close();
         }
@@ -106,21 +111,41 @@ export function clickAd(
               // one open.
               log.verbose(`${page.url()} Blocked attempted navigation to ${req.url()}`);
               let newPage = await BROWSER.newPage();
+              let ctPageId: number | undefined;
               try {
                 ctPage = newPage;
                 log.debug(`${newPage.url()}: Loading and scraping popup page`);
-                await newPage.goto(req.url(), { referer: req.headers().referer });
+                await newPage.goto(req.url(), {
+                  referer: req.headers().referer,
+                  timeout: PAGE_NAVIGATION_TIMEOUT
+                });
+                ctPageId = await db.archivePage({
+                  timestamp: new Date(),
+                  job_id: FLAGS.jobId,
+                  crawl_id: CRAWL_ID,
+                  url: newPage.url(),
+                  original_url: newPage.url(),
+                  page_type: PageType.LANDING,
+                  referrer_page: pageId,
+                  referrer_page_url: page.url(),
+                  referrer_ad: adId
+                });
                 await sleep(PAGE_SLEEP_TIME);
                 await scrapePage(newPage, {
+                  pageId: ctPageId,
                   pageType: PageType.LANDING,
-                  referrerPage: pageId,
-                  referrerPageUrl: page.url(),
-                  crawlListUrl: crawlListUrl,
                   referrerAd: adId
                 });
                 clearTimeout(timeout);
                 resolve();
               } catch (e) {
+                if (ctPageId) {
+                  if (e instanceof Error) {
+                    await db.updatePage(ctPageId, { error: e.message });
+                  } else {
+                    await db.updatePage(ctPageId, { error: (e as string) });
+                  }
+                }
                 reject(e);
               } finally {
                 await newPage.close();
@@ -237,18 +262,36 @@ export function clickAd(
           log.debug(`${newPage.url()}: Loading and scraping popup page`);
           // injectDOMListener(newPage);
           newPage.on('load', async () => {
+            let db = DbClient.getInstance();
+            let ctPageId;
             try {
+              ctPageId = await db.archivePage({
+                timestamp: new Date(),
+                job_id: FLAGS.jobId,
+                crawl_id: CRAWL_ID,
+                url: newPage.url(),
+                original_url: newPage.url(),
+                page_type: PageType.LANDING,
+                referrer_page: pageId,
+                referrer_page_url: page.url(),
+                referrer_ad: adId
+              });
               await sleep(PAGE_SLEEP_TIME);
               await scrapePage(newPage, {
+                pageId: ctPageId,
                 pageType: PageType.LANDING,
-                referrerPage: pageId,
-                referrerPageUrl: page.url(),
-                crawlListUrl: crawlListUrl,
                 referrerAd: adId
               });
               clearTimeout(timeout);
               resolve();
             } catch (e) {
+              if (ctPageId) {
+                if (e instanceof Error) {
+                  await db.updatePage(ctPageId, { error: e.message });
+                } else {
+                  await db.updatePage(ctPageId, { error: (e as string) });
+                }
+              }
               reject(e);
             } finally {
               if (!newPage.isClosed()) {

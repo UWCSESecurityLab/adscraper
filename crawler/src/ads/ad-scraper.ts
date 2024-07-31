@@ -50,7 +50,7 @@ interface ScrapedAd {
 interface CrawlAdMetadata {
   pageType: PageType,
   parentPageId: number,
-  crawlListUrl: string,
+  originalUrl: string,
   chumboxId?: number,
   platform?: string
 }
@@ -101,7 +101,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
         adId = await scrapeAd(scrapeTarget, page, {
           pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
-          crawlListUrl: metadata.crawlListUrl,
+          originalUrl: metadata.originalUrl,
           chumboxId: chumboxId,
           platform: platform
         });
@@ -131,7 +131,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
             page,
             adId,
             metadata.parentPageId,
-            metadata.crawlListUrl
+            metadata.originalUrl
           );
         }
       } catch (e) {
@@ -167,7 +167,7 @@ export async function scrapeAd(ad: ElementHandle,
   const db = DbClient.getInstance();
 
   let [timeout, timeoutId] = createAsyncTimeout<number>(
-    `${page.url()}: timed out while crawling ad`, AD_CRAWL_TIMEOUT);
+    `${page.url()}: timed out while scraping ad`, AD_SCRAPE_TIMEOUT);
 
   // Declare adId here - we create an empty row in the database before
   // the ad is scraped, so we can use the id for the directory name.
@@ -190,14 +190,14 @@ export async function scrapeAd(ad: ElementHandle,
         await getCrawlOutputDirectory(),
         'scraped_ads/ad_' + adId);
 
-      if (!fs.existsSync(adsDir)) {
-        fs.mkdirSync(adsDir, { recursive: true });
+      const fullAdsDir = path.join(FLAGS.outputDir, adsDir);
+      if (!fs.existsSync(fullAdsDir)) {
+        fs.mkdirSync(fullAdsDir, { recursive: true });
       }
 
       // Scrape ad content
       const adContent = await scrapeAdContent(
-        page, ad, adsDir,
-        FLAGS.crawlerHostname,
+        page, ad, fullAdsDir,
         FLAGS.scrapeOptions.screenshotAdsWithContext,
         adId);
 
@@ -240,6 +240,7 @@ export async function scrapeAd(ad: ElementHandle,
     if (adId) {
       db.postgres.query('DELETE FROM ad WHERE id=$1', [adId]);
       const dir = path.join(
+        FLAGS.outputDir,
         await getCrawlOutputDirectory(),
         'scraped_ads/ad_' + adId);
       if (fs.readdirSync(dir).length == 0) {
@@ -269,8 +270,6 @@ async function scrapeAdContent(
   page: Page,
   ad: ElementHandle,
   screenshotDir: string,
-  // externalScreenshotDir: string | undefined,
-  screenshotHost: string,
   withContext: boolean,
   adId?: number): Promise<ScrapedAd> {
 
@@ -279,9 +278,6 @@ async function scrapeAdContent(
 
   const screenshotFile = (adId ? 'ad_' + adId : uuidv4()) + '.webp';
   const savePath = path.join(screenshotDir, screenshotFile);
-  // const realPath = externalScreenshotDir
-  // ? path.join(externalScreenshotDir, screenshotFile)
-  // : undefined;
   let screenshotFailed = false;
   let adInContextBB: sharp.Region | undefined;
   await page.evaluate((e: Element) => {
@@ -353,8 +349,8 @@ async function scrapeAdContent(
 
   return {
     timestamp: new Date(),
-    screenshot: screenshotFailed ? undefined : savePath,
-    screenshot_host: screenshotFailed ? undefined : screenshotHost,
+    // Save path to screenshot in database as relative path
+    screenshot: screenshotFailed ? undefined : savePath.replace(`${FLAGS.outputDir}/`, ''),
     html: html,
     max_bid_price: prebid?.max_bid_price,
     winning_bid: prebid?.winning_bid,

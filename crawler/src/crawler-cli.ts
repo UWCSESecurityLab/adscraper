@@ -19,18 +19,6 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'main'
   },
   {
-    name: 'crawl_list',
-    type: String,
-    description: 'A text file containing URLs to crawl, one URL per line',
-    group: 'main'
-  },
-  {
-    name: 'crawl_list_with_referrer_ads',
-    type: String,
-    description: 'A CSV with the columns (url, ad_id) containing URLs to crawl, and the ad_id of the referrer ad. Use this option instead of --crawl_list if scraping ad landing pages separately from ads, to avoid profile pollution.',
-    group: 'main'
-  },
-  {
     name: 'output_dir',
     type: String,
     description: 'Directory where screenshot, HTML, and MHTML files will be saved.',
@@ -39,28 +27,27 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'name',
     type: String,
-    description: 'Name of this crawl, for your reference. (Optional)',
+    description: 'Name of this crawl (optional).',
     group: 'main',
   },
-  {
-    name: 'crawl_id',
-    type: Number,
-    description: 'If resuming a previous crawl, the id of the previous crawl (Optional).',
-    group: 'main'
-  },
+  // {
+  //   name: 'crawl_id',
+  //   type: Number,
+  //   description: 'If resuming a previous crawl, the id of the previous crawl (Optional).',
+  //   group: 'main'
+  // },
   {
     name: 'job_id',
     alias: 'j',
     type: Number,
-    description: 'ID of the job that is managing this crawl (Optional, required if run via the crawl coordinator)',
+    description: 'ID of the job that is managing this crawl (Optional, required if run via Kubernetes job)',
     group: 'main'
   },
   {
-    name: 'crawler_hostname',
-    type: String,
-    description: 'The hostname of this crawler (Optional). Defaults to "os.hostname()", but if this crawler is being run in a Docker container, you must manually supply the hostname of the Docker host to correctly tag screenshots.',
-    defaultValue: os.hostname(),
-    group: 'main'
+    name: 'resume_if_able',
+    type: Boolean,
+    defaultOption: false,
+    description: 'If included, the crawler will attempt to resume any previous incomplete crawl with the same name, if one exists. Otherwise, a new crawl record is created and this has no effect.'
   },
   {
     name: 'log_level',
@@ -68,6 +55,30 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     description: 'Sets the level of logging verbosity. Choose one of the following: error > warning > info > debug > verbose. Defaults to "info"',
     defaultValue: 'info',
     group: 'main'
+  },
+  {
+    name: 'crawl_list',
+    type: String,
+    description: 'A text file containing URLs to crawl, one URL per line',
+    group: 'input'
+  },
+  {
+    name: 'ad_url_crawl_list',
+    type: String,
+    description: 'A CSV with the columns (url, ad_id) containing URLs to crawl, and the ad_id of the referrer ad. Use this option instead of --crawl_list if scraping ad landing pages separately from ads, to avoid profile pollution.',
+    group: 'input'
+  },
+  {
+    name: 'url',
+    type: String,
+    description: 'A single URL to crawl. Use this option instead of --crawl_list to crawl one URL at a time.',
+    group: 'input'
+  },
+  {
+    name: 'ad_id',
+    type: String,
+    description: 'If scraping a single URL with --url that is an ad landing page, use this flag to specify the ad in the database that the landing page is associated with.',
+    group: 'input',
   },
   {
     name: 'pg_conf_file',
@@ -128,6 +139,12 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
     group: 'chromeOptions'
   },
   {
+    name: 'proxy_server',
+    type: String,
+    description: 'Proxy server that all Chrome traffic should pass through (Optional). This value is passed directly to Chrome\'s --proxy_server flag.',
+    group: 'chromeOptions'
+  },
+  {
     name: 'shuffle_crawl_list',
     type: Boolean,
     description: 'Include this arg to randomize the order the URLs in the crawl list are visited.',
@@ -141,8 +158,16 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   },
   {
     name: 'crawl_page_with_ads',
+    type: Number,
+    defaultValue: 0,
+    description: 'Crawl pages with ads: if included, on addition to crawling the URLs from the crawl list, the crawler will crawl additional links on the page with ads. Pass the number of additional pages you want to visit.',
+    group: 'crawlOptions'
+  },
+  {
+    name: 'refresh_pages',
     type: Boolean,
-    description: 'Crawl page with ads: if included, in addition to crawling the home page, crawl a page on this domain that has ads.',
+    defaultValue: false,
+    description: 'If included, the crawler will refresh each page after each scrape, and scrape the page a second time. Default: false',
     group: 'crawlOptions'
   },
   {
@@ -191,6 +216,11 @@ const usage = [
     optionList: optionsDefinitions
   },
   {
+    header: 'Input Options (Choose one)',
+    group: 'input',
+    optionList: optionsDefinitions,
+  },
+  {
     header: 'Database Configuration',
     optionList: optionsDefinitions,
     group: 'pg'
@@ -215,21 +245,13 @@ if (options.help) {
   console.log(commandLineUsage(usage));
   process.exit(0);
 }
-// if (!options.crawl_list) {
-//   console.log('Missing required parameter: --crawl_list');
-//   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-//   process.exit(1);
-// }
-if (!options.crawl_list && !options.crawl_list_with_referrer_ads) {
-  console.log('Missing required parameter: --crawl_list OR --crawl_list_with_referrer_ads');
+
+if ((!!options.crawl_list ? 1 : 0) + (!!options.ad_url_crawl_list ? 1 : 0) + (!!options.url ? 1 : 0) != 1) {
+  console.log('Must specify input using exactly one of --crawl_list, --ad_url_crawl_list, or --url');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }
-if (options.crawl_list && options.crawl_list_with_referrer_ads) {
-  console.log('Cannot provide both --crawl_list and --crawl_list_with_referrer_ads flags');
-  console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
-  process.exit(1);
-}
+
 if (!options.output_dir) {
   console.log('Missing required parameter: --output_dir');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
@@ -300,26 +322,29 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
 (async function() {
   try {
     await crawler.crawl({
-      name: options.name,
       jobId: options.job_id,
+      // crawlId: options.crawl_id,
+      crawlName: options.name,
+      resumeIfAble: options.resume_if_able,
       outputDir: options.output_dir,
-      pgConf: pgConf,
-      crawlerHostname: options.crawler_hostname,
-      crawlListFile: options.crawl_list ? options.crawl_list : options.crawl_list_with_referrer_ads,
-      crawlListHasReferrerAds: options.crawl_list_with_referrer_ads != undefined ,
-      crawlId: options.crawl_id,
+      url: options.url,
+      adId: options.ad_id,
+      urlList: options.crawl_list,
+      adUrlList: options.ad_url_crawl_list,
       logLevel: logLevel,
 
       chromeOptions: {
         headless: headless,
         profileDir: options.profile_dir,
-        executablePath: options.executable_path
+        executablePath: options.executable_path,
+        proxyServer: options.proxy_server
       },
 
       crawlOptions: {
         shuffleCrawlList: Boolean(options.shuffleCrawlList),
-        crawlAdditionalArticlePage: Boolean(options.crawl_article),
-        crawlAdditionalPageWithAds: Boolean(options.crawl_page_with_ads),
+        findAndCrawlArticlePage: Boolean(options.crawl_article),
+        findAndCrawlPageWithAds: options.crawl_page_with_ads,
+        refreshPage: options.refresh_pages,
       },
 
       scrapeOptions: {
@@ -329,7 +354,7 @@ if (options.pg_conf_file && fs.existsSync(options.pg_conf_file)) {
         screenshotAdsWithContext: Boolean(options.screenshot_ads_with_context),
         captureThirdPartyRequests: Boolean(options.capture_third_party_request_urls)
       },
-    });
+    }, pgConf);
     console.log('Crawl succeeded');
     process.exit(0);
   } catch (e: any) {

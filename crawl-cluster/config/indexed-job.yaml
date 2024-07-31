@@ -1,0 +1,94 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: adscraper-job-indexed  # Will be overwritten with name provided in JobSpec
+spec:
+  # These values will be set automatically by runIndexedJob.ts
+  # parallelism: 4  # maxWorkers
+  # completions: 8  # Number of individual crawls
+  completionMode: Indexed
+  # Pods can retry a crawl task up to 20 times
+  backoffLimitPerIndex: 20
+  # Up to 2000 crawl tasks can be failed before the job is considered failed -
+  # adjust to your preference.
+  maxFailedIndexes: 2000
+  template:
+    metadata:
+      name: adscraper-job-indexed  # Will be overwritten with name provided in JobSpec
+    spec:
+      restartPolicy: Never
+      # Allow pods a whole hour to terminate gracefully - if doing profile
+      # crawls, it may take a while to write the Chrome profile to the storage
+      # volume.
+      terminationGracePeriodSeconds: 3600
+      containers:
+        - name: crawler
+          image: docker.io/ezeng/adscraper:latest
+          imagePullPolicy: Always
+          resources:
+            # Adjust based on your hardware's capabilities. Crawls actually tend
+            # to be disk-bound, due to Chrome's usage of disk for cache.
+            # Large web pages can cause crawlers to run out of memory.
+            requests:
+              memory: 2G
+              cpu: 1
+            limits:
+              memory: 8G
+              cpu: 2
+          # CPU/memory requests are adjustable during a crawl
+          resizePolicy:
+          - resourceName: cpu
+            restartPolicy: NotRequired
+          - resourceName: memory
+            restartPolicy: NotRequired
+          # adscraper will expect a large storage volume at this path,
+          # to store scraped data. You must use a network storage volume
+          # if you have multiple worker nodes in the cluster.
+          volumeMounts:
+          - mountPath: /home/pptruser/data
+            name: adscraper-storage
+          env:
+            # The job id will be set automatically by runJob.ts
+            # - name: JOB_ID
+            #   value: 123
+            # Postgres credentials will be populated by postgres-secret.yaml
+            - name: PG_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: database
+            - name: PG_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: user
+            - name: PG_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: PG_HOST
+              value: postgres.default.svc.cluster.local
+            - name: PG_PORT
+              value: "5432"
+            - name: PUPPETEER_CACHE_DIR
+              value: /home/pptruser/.cache/puppeteer
+      nodeSelector:
+        crawler: "true"
+      securityContext:
+        capabilities:
+            add:
+            - SYS_ADMIN
+      # Set up your storage mount here
+      # volumes:
+      #   - name: adscraper-storage
+  podFailurePolicy:
+    rules:
+    - action: Ignore
+      onExitCodes:
+        operator: In
+        values: [244]
+    - action: FailIndex
+      onExitCodes:
+        operator: In
+        values: [242, 243, 245]

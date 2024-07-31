@@ -5,7 +5,7 @@ CREATE DATABASE adscraper;
 
 CREATE TABLE job (
   id SERIAL PRIMARY KEY,
-  name TEXT,
+  name TEXT UNIQUE,
   start_time TIMESTAMPTZ,
   completed BOOLEAN,
   completed_time TIMESTAMPTZ,
@@ -22,11 +22,11 @@ CREATE TABLE crawl (
   crawl_list TEXT,
   crawl_list_current_index INTEGER,
   crawl_list_length INTEGER,
+  last_checkpoint_index INTEGER,
+  profile_id TEXT,
   profile_dir TEXT,
   crawler_hostname TEXT,
   crawler_ip TEXT
-  -- geolocation TEXT,
-  -- vpn_hostname TEXT,
 );
 
 -- A row in this table is created for every page visited by the crawler.
@@ -47,7 +47,12 @@ CREATE TABLE page (
   -- The original URL on the crawl list that this page originated from
   -- (may differ from url field if there was a redirect, or if this is a subpage
   -- or landing page)
-  crawl_list_url TEXT,
+  original_url TEXT,
+
+  -- The crawler can be configured to refresh a page and crawl it again.
+  -- This field indicates how many times this page has been loaded/reloaded,
+  -- prior to and including this page's load.
+  reload INTEGER,
 
   ------ Scraped Content ------
   -- Fields in this section are optional, page content is only scraped when
@@ -71,10 +76,13 @@ CREATE TABLE page (
   referrer_page_url TEXT,
   -- If this is a subpage or ad landing page, and the parent page was scraped,
   -- the id of the parent page.
-  referrer_page INTEGER references page(id)
+  referrer_page INTEGER references page(id),
   -- If this is an ad landing page, the id of the ad that opened this page.
   -- Field is added later, after the ad table is defined.
   -- referrer_ad INTEGER references ad(id)
+
+  -- Error message, if a fatal error is encountered while crawling this page
+  error TEXT;
 );
 
 CREATE TABLE chumbox (
@@ -156,10 +164,11 @@ CREATE INDEX iframe_ad_id_index ON iframe(parent_ad);
 
 CREATE TABLE request (
   id SERIAL PRIMARY KEY,
+  job_id INTEGER,   -- no foreign key constraint to speed up deletes
+  crawl_id INTEGER,
+  parent_page INTEGER,
   timestamp TIMESTAMPTZ,
-  parent_page INTEGER REFERENCES page(id),
   initiator TEXT,
   target_url TEXT,
-  resource_type TEXT,
-  sec_fetch_site TEXT
+  resource_type TEXT
 );
