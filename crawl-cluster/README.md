@@ -197,3 +197,44 @@ Here is an example credentials file:
   "password": "asdf1234"
 }
 ```
+
+### Monitoring crawl jobs
+
+To monitor the status of your crawl jobs, you can use the following `kubectl`
+commands on the control plane server:
+
+```sh
+# To view overall job progress
+kubectl describe job <job-name>
+
+# To view statuses of each crawl instance
+kubectl get pods -o wide -l job-name=<job-name>
+
+# View active crawl instances
+kubectl get pods -o wide --field-selector status.phase=Running
+
+# To view the logs of a specific crawler (for debugging)
+kubectl logs <pod-name>
+```
+
+Sometimes, crawlers may hang on individual pages. In this case, you can delete
+the pod and let Kubernetes restart the crawl:
+
+```sh
+kubectl delete pod <pod-name>
+```
+
+
+### Viewing crawl results
+
+Outputs will be stored in the Postgres database and in the storage volume
+specified in the job configuration file.
+
+The database contains metadata for the crawls: profiles, pages, ads, and
+third party requests. See [adscraper.sql](../adscraper.sql)
+for the schema of the database.
+
+The storage volume contains the raw HTML and screenshots of the pages and
+ads scraped. Each job will have its own directory, with the pattern `job_<jobId>`.
+The database contains a reference to the path of the screenshot and HTML files
+for each page and ad, which is relative to the root of the storage volume.
