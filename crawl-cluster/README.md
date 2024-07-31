@@ -159,7 +159,7 @@ and the crawl lists that should be used.
 [src/jobSpec.ts](src/jobSpec.ts) contains a TypeScript interface for the
 job specification file.
 
-TODO: describe schemas
+TODO: describe schemas and configuration options, provide examples
 
 ### Running crawl jobs
 
@@ -223,7 +223,6 @@ the pod and let Kubernetes restart the crawl:
 ```sh
 kubectl delete pod <pod-name>
 ```
-
 
 ### Viewing crawl results
 

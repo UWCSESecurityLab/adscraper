@@ -60,7 +60,12 @@ If you used adscraper in your research project, please cite the repository
 using the following BibTeX:
 
 ```bibtex
-TODO
+@software{Eric_Zeng_adscraper,
+author = {Eric Zeng},
+license = {MIT},
+title = {{adscraper: A Web Crawler for Measuring Online Ad Content}},
+url = {https://github.com/UWCSESecurityLab/adscraper}
+}
 ```
 
 ## Setup
