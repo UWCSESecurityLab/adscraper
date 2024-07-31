@@ -1,82 +1,199 @@
-# Crawl cluster setup
+# Adscraper Distributed Crawls
+
+This directory contains code and configuration for running parallel crawls with
+adscraper, using Kubernetes. To do so, you define a JSON
+_job specification_ in a JSON file,
+where you specify the multiple crawls you would like to run. A script takes
+this as input and converts it to a Kubernetes indexed job, and Kubernetes
+will handle automatically scheduling and executing your crawls in parallel.
+
+The adscraper distributed crawl architecture enables several types of crawls,
+depending on your experimental design:
+
+- **Profile-based crawls**, where each you can build a separate browsing profile
+  for each crawler instance. This is useful for simulating users and how they
+  are tracked or targeted based on their web history.
+- **Isolated crawls**, where each URL is crawled with a clean profile. This is
+  useful for studying contextual ad targeting.
+- **Ad landing page crawls** - given a list of ad URLs retrieved from a previous
+  crawl (using the `clickAndBlockLoad` ad scraping strategy in adscraper),
+  you can crawl the landing pages and associate them with those previous
+  ads. This is useful for collecting ad landing page content without biasing
+  profile-based crawls.
+
+There are also some other useful features built-in to make web measurement
+research easier, such as:
+
+- Support for SOCKS5 proxies, to simulate users from different IPs and locations
+- Checkpointing and retrying crawls, in case long crawls fail
+
+The crawl cluster is designed to be run on a Kubernetes cluster to scale crawls
+over multiple nodes (a control plane node and several worker nodes).
+Additionally, you will need to run other
+services to enable the cluster to run, including a PostgreSQL database and
+a network storage volume to store scraped data.
+If you do not need to run more than a few crawl jobs, consider using the
+base adscraper script.
 
 ## Pre-requisites
 
-- Local / dev environment
-  - Docker Desktop
-  - `kubectl`
-  - `minikube`
-- Production environment
-  - `containerd` or `cri-dockerd`
-  - `kubectl`
-  - `kubelet`
-  - `kubeadm`
+Adscraper distributed crawls require the following software to be installed:
+
+On the Kubernetes control plane node (the server that coordinates the cluster):
+
+- Node.js
+- Kubernetes (Recommended: [k3s server](https://k3s.io/))
+
+On worker nodes:
+
+- Kubernetes (Recommended: [k3s agent](https://k3s.io/))
+
+On the database server:
+
+- PostgreSQL
 
 ## Setup
 
-1. Set up a cluster
-   - Local (Minikube): `minikube start --cni calico --mount --mount-string $(pwd)/test-input:/data --driver=docker`
-   - Production: TODO
+### Setting up the cluster
 
-2. Set up worker nodes
-    - Local: `minikube node add worker` (do 2x)
-    - Production: TODO
+First, you will need to set up a Kubernetes cluster, which will manage the
+crawl jobs, as well as database and storage services, for collecting crawl data.
 
-3. Set up a location for storing input and output files - to be mounted to containers
-    - Local: pick a local directory to mount
-    - Production: make a network volume, mount
-      - Edit YAML files to mount
+1. Set up Kubernetes on your nodes:
+   - Follow the [k3s quickstart guide](https://docs.k3s.io/quick-start)
+     for instructions on setting up a k3s cluster.
+   - Ideally: set up a separate control plane node, and worker nodes for the
+     crawlers
+   - On your control plane node, indicate which nodes can be used to crawl by running:
 
-4. Set up a database
-    - Create a Postgres database outside of Kubernetes
-    - Create the database/tables in db/adscraper.sql
-    - Set up a Service and EndpointSlice to make it accessible in
-      Kubernetes
-      - Edit `postgres-service.yaml` with address/port of database
-      - Local: listen on 0.0.0.0, will be accessible to minikube at
-        the address `host.minikube.internal`
-      - Apply config:
+```sh
+kubectl label node <node-name> crawler=true
+```
+
+2. Set up a storage volume for storing inputs and outputs.
+    - The crawl cluster needs a shared storage volume that all crawler instances
+      can access, so that they can read input files, and write scraped ad data
+      to the same location.
+    - If you are running on a single node, you can designate a directory on
+      your machine as a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
+      volume.
+    - If you are running on multiple nodes, you will need to set up a network
+      storage volume. Refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes)
+      for setting up volumes and drivers.
+    - Once you have set up your local or network storage volume,
+      to register your volume with adscraper, edit
+      [config/indexed-job.yaml](config/indexed-job.yaml)
+      and add your volume to `.spec.template.spec.volumes`,
+      using the name `adscraper-storage`.
+
+3. Set up a Postgres database (not through Kubernetes)
+    - This database can run anywhere as long as it is accessible to the
+      Kubernetes cluster (no firewalls in the way). I ran it on the control
+      plane server.
+    - Run the queries to create the database, tables, and indexes in [adscraper.sql](../adscraper.sql)
+    - Edit [config/postgres-service.yaml](config/postgres-service.yaml), and replace
+      the `externalName` field with the address of your database,
+      and the `ports` field with the ports of your database. This should be the
+      external IP or hostname of your database server.
+    - Set up the database secrets so that adscraper can access the database:
+      Edit [config/pg-conf-secret.yaml](config/pg-conf-secret.yaml) and replace
+      the `data` fields with the base64-encoded values of your database, user,
+      and password. You can use the `echo -n 'password' | base64` command to
+      encode your values.
+    - Apply the Service and Secret configs:
 
 ```sh
 kubectl apply -f config/postgres-service.yaml
+kubectl apply -f config/postgres-secret.yaml
 ```
 
-5. Set up database secrets
-    - Edit `postgres-secret.yaml`; provide base64-encoded values for database, user, and password.
-      - Base64 conversion: `echo -n 'password' | base64`
-    - Apply config:
-
-```sh
-kubectl apply -f config/pg-conf-secret.yaml
-```
-
-6. Set up network policy to allow egress for crawls
+1. Set up network policy to allow adscraper
+   containers to access the internet. This changes the network policy to allow
+   egress traffic.
 
 ```sh
 kubectl apply -f config/network-policy.yaml
 ```
 
-7. Set up message queue service
+### Creating crawler inputs
 
-```sh
-kubectl create -f config/rabbitmq-service.yaml
-kubectl create -f config/rabbitmq-controller.yaml
+Next, create input files to define your crawl jobs. Each crawl job contains
+two components:
+
+- Crawl lists: one or more text files containing a list of URLs to crawl
+- Job specification: a JSON file that specifies which crawl lists are to be used,
+  and configuration options for crawler behavior and profile handling.
+
+#### Crawl Lists
+
+Crawl lists are text files containing a list of URLs to crawl. Each URL should
+be on a separate line. If you are crawling with multiple profiles, each profile's
+crawl list should be in a separate file.
+
+For example, if you had two profiles, one for a user interested in sports and
+another for a user interested in cooking, you would have two crawl lists:
+
+**sports_crawl_list.txt**:
+
+```txt
+https://www.espn.com
+https://www.nba.com
+https://www.mlb.com
 ```
 
-## Run a crawl job
+**cooking_crawl_list.txt**:
 
-1. Set up directory structure in the storage volume, populate with inputs
-   - input/
-     - job_id/
-     - (crawl lists)
-      - output/
-      - profiles/
+```txt
+https://www.seriouseats.com
+https://www.foodnetwork.com
+https://www.allrecipes.com
+```
 
-On the control plane node, run `node runjob.js` with the job specification file.
+These text files **must** be stored in the storage volume for the cluster,
+as the crawler instances need to be able to read them from disk.
 
+#### Job Specification File
 
-## TODOs
+The job specification file is a JSON file that contains crawler configurations,
+and the crawl lists that should be used.
+[src/jobSpec.ts](src/jobSpec.ts) contains a TypeScript interface for the
+job specification file.
 
-- Figure out container mounts in job.yaml
-- Write a script that creates/modifies job.yaml based on the jobspec (number of crawls, mounts, etc.)
-- Write the interface for running containers from crawlspecs
+TODO: describe schemas
+
+### Running crawl jobs
+
+To run a crawl job, you will run a Node.js script on the control plane server,
+which takes the crawler job specification and database credentials as input.
+This will automatically create a Kubernetes indexed job, which will
+schedule crawls based on available compute resources in your cluster.
+
+From the `crawl-cluster` directory run the following commands to install
+dependencies and compile the script:
+
+```sh
+cd cli
+
+npm install
+npm run build
+```
+
+Then, to run a crawl job, run the following command:
+
+```sh
+node gen/runIndexedJob.js -j <job specification file> -p <postgres credentials file>
+```
+
+The postgres credentials file is a JSON file containing connection parameters.
+The full list of fields is defined in the [node-postgres library](https://node-postgres.com/apis/client).
+Here is an example credentials file:
+
+```json
+{
+  "host": "my-database.example.com",
+  "port": 5432,
+  "database": "adscraper",
+  "user": "myname",
+  "password": "asdf1234"
+}
+```
