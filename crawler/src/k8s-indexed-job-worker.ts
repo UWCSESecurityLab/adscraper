@@ -239,7 +239,7 @@ async function main() {
     let crawlSuccess = false;
     let error: Error | undefined = undefined;
 
-    let shouldCheckpoint = flags.profileOptions.writeProfile && flags.crawlOptions.checkpointFreq;
+    let shouldCheckpoint = flags.profileOptions.writeProfile && flags.crawlOptions.checkpointFreqSeconds;
     let saveProfileCheckpoint = async () => {
       log.info('Closing browser for checkpoint...');
       await BROWSER.close();

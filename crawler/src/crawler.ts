@@ -34,7 +34,7 @@ export interface CrawlerFlags {
 
   chromeOptions: {
     profileDir?: string,
-    headless: boolean | 'new',
+    headless: boolean,
     executablePath?: string,
     proxyServer?: string
   }
@@ -44,7 +44,7 @@ export interface CrawlerFlags {
     findAndCrawlPageWithAds: number,
     findAndCrawlArticlePage: boolean
     refreshPage: boolean,
-    checkpointFreq?: number,
+    checkpointFreqSeconds?: number,
   }
 
   scrapeOptions: {
@@ -217,7 +217,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
         crawl_list: crawlListFile ? crawlListFile : FLAGS.url,
         crawl_list_current_index: 0,
         crawl_list_length: crawlList.length,
-        last_checkpoint_index: flags.crawlOptions.checkpointFreq ? 0 : undefined,
+        last_checkpoint_index: flags.crawlOptions.checkpointFreqSeconds ? 0 : undefined,
         profile_id: FLAGS.profileId,
         profile_dir: FLAGS.chromeOptions.profileDir,
         crawler_hostname: os.hostname(),
@@ -260,7 +260,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
 
 
       // Then assign the crawl id and starting index
-      if (FLAGS.crawlOptions.checkpointFreq && checkpointFn) {
+      if (FLAGS.crawlOptions.checkpointFreqSeconds && checkpointFn) {
         // If doing a checkpointed crawl, start from checkpoint index.
         log.info(`Resuming crawl ${prevCrawl.rows[0].id} (${FLAGS.crawlName}) from last profile checkpoint index: ${prevCrawl.rows[0].last_checkpoint_index} of ${prevCrawl.rows[0].crawl_list_length}`);
         crawlListStartingIndex = prevCrawl.rows[0].last_checkpoint_index;
@@ -298,9 +298,9 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
         }
 
         // Check if we need to run the checkpoint function
-        if (FLAGS.crawlOptions.checkpointFreq
+        if (FLAGS.crawlOptions.checkpointFreqSeconds
           && checkpointFn
-          && (Date.now() - lastCheckpointTime) / 1000 > FLAGS.crawlOptions.checkpointFreq) {
+          && (Date.now() - lastCheckpointTime) / 1000 > FLAGS.crawlOptions.checkpointFreqSeconds) {
           log.info(`Running checkpoint function at index ${i} in crawl list`);
           await checkpointFn();
           await db.postgres.query('UPDATE crawl SET last_checkpoint_index=$1 WHERE id=$2', [i, CRAWL_ID]);

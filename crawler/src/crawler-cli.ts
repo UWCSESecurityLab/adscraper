@@ -263,15 +263,13 @@ if (options.click_ads !== 'noClick' && options.click_ads !== 'clickAndBlockLoad'
   process.exit(1);
 }
 
-let headless: boolean | 'new';
+let headless: boolean;
 if (options.headless == 'true') {
   headless = true;
 } else if (options.headless == 'false') {
   headless = false;
-} else if (options.headless == 'new' || options.headless == undefined) {
-  headless = 'new';
 } else {
-  console.log('Value of --headless must be either "true", "false", or "new"');
+  console.log('Value of --headless must be either "true" or "false"');
   console.log('Run "node gen/crawler-cli.js --help" to view usage guide');
   process.exit(1);
 }

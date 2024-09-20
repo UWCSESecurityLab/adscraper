@@ -176,7 +176,7 @@ function generateProfileCrawlMessages(jobId: number, jobSpec: JobSpecWithProfile
       "profileId": crawlSpec.profileId,
       "chromeOptions": {
         "profileDir": '/home/pptruser/chrome_profile',
-        "headless": 'new',
+        "headless": true,
         "proxyServer": crawlSpec.proxyServer ? crawlSpec.proxyServer : jobSpec.profileOptions.proxyServer,
       },
       // TODO: also allow individual crawls to override crawl/scrape options if
@@ -228,7 +228,7 @@ function generateIsolatedCrawlMessages(jobId: number, jobSpec: JobSpecWithCrawlL
       "resumeIfAble": true,
       "url": url,
       "chromeOptions": {
-        "headless": 'new',
+        "headless": true,
         "proxyServer": jobSpec.profileOptions.proxyServer
       },
       "crawlOptions": jobSpec.crawlOptions,
@@ -289,7 +289,7 @@ async function generateAdCrawlMessages(jobId: number, jobSpec: JobSpecWithAdUrlC
       "url": urls[i],
       "adId": adIds[i],
       "chromeOptions": {
-        "headless": 'new',
+        "headless": true,
       },
       "crawlOptions": jobSpec.crawlOptions,
       "scrapeOptions": jobSpec.scrapeOptions,
