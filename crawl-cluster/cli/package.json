@@ -10,25 +10,24 @@
   "author": "Eric Zeng",
   "license": "MIT",
   "dependencies": {
-    "@kubernetes/client-node": "^0.21.0",
+    "@kubernetes/client-node": "^0.22.0",
     "ads-crawler": "file:../../crawler",
-    "amqplib": "^0.10.3",
+    "amqplib": "^0.10.4",
     "cli-progress": "^3.12.0",
-    "command-line-args": "^5.2.1",
-    "command-line-usage": "^7.0.1",
+    "command-line-args": "^6.0.0",
+    "command-line-usage": "^7.0.3",
     "csv-parser": "^3.0.0",
-    "express": "^4.18.2",
     "job-spec": "file:../../job-spec",
     "jsonschema": "^1.4.1",
-    "pg": "^8.11.3"
+    "pg": "^8.13.0"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.1",
-    "@types/cli-progress": "^3.11.5",
+    "@types/amqplib": "^0.10.5",
+    "@types/cli-progress": "^3.11.6",
     "@types/command-line-args": "^5.2.3",
     "@types/command-line-usage": "^5.0.4",
-    "@types/express": "^4.17.17",
-    "@types/pg": "^8.10.2",
-    "typescript-json-schema": "^0.60.0"
+    "@types/express": "^4.17.21",
+    "@types/pg": "^8.11.10",
+    "typescript-json-schema": "^0.65.1"
   }
 }
