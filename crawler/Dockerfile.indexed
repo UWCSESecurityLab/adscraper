@@ -1,9 +1,9 @@
 # k8s adscraper worker image, for indexed jobs. Pushes to
 # ezeng/adscraper:k8s-indexed-job-worker
-FROM ghcr.io/puppeteer/puppeteer:21.6.0
+FROM ghcr.io/puppeteer/puppeteer:23.4.0
 
 USER root
-RUN apt-get update && apt-get install -y curl ca-certificates amqp-tools jq rsync
+RUN apt-get update && apt-get install -y curl ca-certificates amqp-tools jq
 
 # Add Tini
 ENV TINI_VERSION v0.19.0

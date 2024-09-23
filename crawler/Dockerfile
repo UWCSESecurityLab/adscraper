@@ -1,8 +1,8 @@
 # Docker image for the adscraper command line interface.
-FROM ghcr.io/puppeteer/puppeteer:21.6.0
+FROM ghcr.io/puppeteer/puppeteer:23.4.0
 
 USER root
-RUN apt-get update && apt-get install -y curl ca-certificates amqp-tools jq rsync
+RUN apt-get update && apt-get install -y curl ca-certificates amqp-tools jq
 
 USER pptruser
 
