@@ -48,6 +48,7 @@ interface ScrapedAd {
  * @property platform: The ad platform used by this ad, if identified
  */
 interface CrawlAdMetadata {
+  crawlListIndex: number,
   pageType: PageType,
   parentPageId: number,
   originalUrl: string,
@@ -99,6 +100,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
           ? adHandle.screenshotTarget
           : adHandle.clickTarget;
         adId = await scrapeAd(scrapeTarget, page, {
+          crawlListIndex: metadata.crawlListIndex,
           pageType: metadata.pageType,
           parentPageId: metadata.parentPageId,
           originalUrl: metadata.originalUrl,
@@ -131,6 +133,7 @@ export async function scrapeAdsOnPage(page: Page, metadata: CrawlAdMetadata) {
             page,
             adId,
             metadata.parentPageId,
+            metadata.crawlListIndex,
             metadata.originalUrl
           );
         }

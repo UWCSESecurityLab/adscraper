@@ -325,12 +325,14 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
               let pageId;
               if (isAdUrlCrawl) {
                 pageId = await loadAndHandlePage(url, seedPage, {
+                  crawlListIndex: i,
                   pageType: PageType.LANDING,
                   referrerAd: prevAdId,
                   reload: 0
                 });
               } else {
                 pageId = await loadAndHandlePage(url, seedPage, {
+                  crawlListIndex: i,
                   pageType: PageType.MAIN,
                   reload: 0
                 });
@@ -341,12 +343,14 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                 seedPage = await BROWSER.newPage();
                 if (isAdUrlCrawl) {
                   pageId = await loadAndHandlePage(url, seedPage, {
+                    crawlListIndex: i,
                     pageType: PageType.LANDING,
                     referrerAd: prevAdId,
                     reload: 1
                   });
                 } else {
                   pageId = await loadAndHandlePage(url, seedPage, {
+                    crawlListIndex: i,
                     pageType: PageType.MAIN,
                     reload: 1
                   });
@@ -361,6 +365,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                 if (articleUrl) {
                   let articlePage = await BROWSER.newPage();
                   await loadAndHandlePage(articleUrl, articlePage, {
+                    crawlListIndex: i,
                     pageType: PageType.SUBPAGE,
                     referrerPageId: pageId,
                     referrerPageUrl: seedPage.url(),
@@ -370,6 +375,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                   if (FLAGS.crawlOptions.refreshPage) {
                     articlePage = await BROWSER.newPage();
                     await loadAndHandlePage(articleUrl, articlePage, {
+                      crawlListIndex: i,
                       pageType: PageType.SUBPAGE,
                       referrerPageId: pageId,
                       referrerPageUrl: seedPage.url(),
@@ -387,6 +393,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                 if (urlWithAds) {
                   let adsPage = await BROWSER.newPage();
                   await loadAndHandlePage(urlWithAds, adsPage, {
+                    crawlListIndex: i,
                     pageType: PageType.SUBPAGE,
                     referrerPageId: pageId,
                     referrerPageUrl: seedPage.url(),
@@ -396,6 +403,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
                   if (FLAGS.crawlOptions.refreshPage) {
                     adsPage = await BROWSER.newPage();
                     await loadAndHandlePage(urlWithAds, adsPage, {
+                      crawlListIndex: i,
                       pageType: PageType.SUBPAGE,
                       referrerPageId: pageId,
                       referrerPageUrl: seedPage.url(),
@@ -461,6 +469,7 @@ export async function crawl(flags: CrawlerFlags, pgConf: ClientConfig, checkpoin
  */
 interface LoadPageMetadata {
   pageType: PageType,
+  crawlListIndex: number,
   referrerPageId?: number,
   referrerPageUrl?: string,
   referrerAd?: number,
@@ -488,6 +497,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     job_id: FLAGS.jobId,
     crawl_id: CRAWL_ID,
     original_url: url,
+    crawl_list_index: metadata.crawlListIndex,
     page_type: metadata.pageType,
     referrer_page: metadata.referrerPageId,
     referrer_page_url: metadata.referrerPageUrl,
@@ -567,6 +577,7 @@ async function loadAndHandlePage(url: string, page: Page, metadata: LoadPageMeta
     // Scrape ads
     if (FLAGS.scrapeOptions.scrapeAds) {
       await scrapeAdsOnPage(page, {
+        crawlListIndex: metadata.crawlListIndex,
         originalUrl: url,
         pageType: metadata.pageType,
         parentPageId: pageId,

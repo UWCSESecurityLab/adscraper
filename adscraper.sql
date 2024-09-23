@@ -1,8 +1,5 @@
 -- This script constructs the primary database storing scraped site, ad, and
 -- clickthrough page data.
-
-CREATE DATABASE adscraper;
-
 CREATE TABLE job (
   id SERIAL PRIMARY KEY,
   name TEXT UNIQUE,
@@ -34,20 +31,31 @@ CREATE TABLE page (
   id SERIAL PRIMARY KEY,
   job_id INTEGER REFERENCES job(id),
   crawl_id INTEGER REFERENCES crawl(id),
+
   -- When the page was scraped
   timestamp TIMESTAMPTZ,
+
   -- URL of the scraped page
   url TEXT,
-  -- Domain name of url (for convenience)
-  domain TEXT,
-  -- Indicates whether this page came from the crawl list (main),
-  -- from selecting a random link after visiting the crawl list page (subpage),
-  -- or from clicking on an ad (landing).
-  page_type TEXT,
+
   -- The original URL on the crawl list that this page originated from
   -- (may differ from url field if there was a redirect, or if this is a subpage
   -- or landing page)
   original_url TEXT,
+
+  -- Index of the original URL in the crawl list.
+  -- There may be multiple pages with the same crawl_list_index,
+  -- for example, if the crawler reloads the page, navigates to subpages, or
+  -- clicks on ads.
+  crawl_list_index INTEGER,
+
+  -- Domain name of url (for convenience)
+  domain TEXT,
+
+  -- Indicates whether this page came from the crawl list (main),
+  -- from selecting a random link after visiting the crawl list page (subpage),
+  -- or from clicking on an ad (landing).
+  page_type TEXT,
 
   -- The crawler can be configured to refresh a page and crawl it again.
   -- This field indicates how many times this page has been loaded/reloaded,
@@ -65,24 +73,21 @@ CREATE TABLE page (
   mhtml TEXT,
   -- Path to the screenshot file
   screenshot TEXT,
-  -- Hostname of the machine the scraped files are stored on
-  screenshot_host TEXT,
 
   ------ Referrer metadata ------
-  -- How this page was reached, if it is a landing page or subpage of the
-  -- original crawl list URL.
-
   -- If this is a subpage or ad landing page, the URL of the parent page
   referrer_page_url TEXT,
+
   -- If this is a subpage or ad landing page, and the parent page was scraped,
   -- the id of the parent page.
   referrer_page INTEGER references page(id),
+
   -- If this is an ad landing page, the id of the ad that opened this page.
   -- Field is added later, after the ad table is defined.
   -- referrer_ad INTEGER references ad(id)
 
   -- Error message, if a fatal error is encountered while crawling this page
-  error TEXT;
+  error TEXT
 );
 
 CREATE TABLE chumbox (

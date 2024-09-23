@@ -50,20 +50,22 @@ export interface AdDomain {
 }
 
 export interface Page {
+  job_id?: number,
+  crawl_id: number,
   timestamp: Date,
   url?: string,
   original_url: string,
-  html?: string
-  screenshot?: string,
-  screenshot_host?: string,
+  crawl_list_index: number,
   page_type: string,
-  job_id?: number,
-  crawl_id: number,
+  reload?: number,
+  html?: string,
+  mhtml?: string,
+  screenshot?: string,
+  // screenshot_host?: string,
   referrer_page?: number,
   referrer_page_url?: string,
   referrer_ad?: number,
   error?: string,
-  reload?: number
 }
 
 export interface WebRequest {

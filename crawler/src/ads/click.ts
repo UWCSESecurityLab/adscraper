@@ -9,10 +9,10 @@ import { sleep } from "../util/timeout.js";
  * Clicks on an ad, and starts a crawl on the page that it links to.
  * @param ad A handle to the ad to click on.
  * @param page The page the ad appears on.
- * @param parentDepth The depth of the parent page of the ad.
- * @param crawlId The database id of this crawl job.
  * @param adId The database id of the ad.
- * @param pageId The database id of the page.
+ * @param pageId The database id of the page the ad appeared on.
+ * @param crawlListIndex The index of the page in the crawl list.
+ * @param originalUrl The URL of the page the ad appeared on.
  * @returns Promise that resolves when crawling is complete for the linked page,
  * and any sub pages opened by clicking on ads in the linked page.
  */
@@ -21,6 +21,7 @@ export function clickAd(
   page: Page,
   adId: number,
   pageId: number,
+  crawlListIndex: number,
   originalUrl: string) {
   return new Promise<void>(async (resolve, reject) => {
     // Create references to event listeners, so that we can remove them in the
@@ -125,6 +126,7 @@ export function clickAd(
                   crawl_id: CRAWL_ID,
                   url: newPage.url(),
                   original_url: newPage.url(),
+                  crawl_list_index: crawlListIndex,
                   page_type: PageType.LANDING,
                   referrer_page: pageId,
                   referrer_page_url: page.url(),
@@ -271,6 +273,7 @@ export function clickAd(
                 crawl_id: CRAWL_ID,
                 url: newPage.url(),
                 original_url: newPage.url(),
+                crawl_list_index: crawlListIndex,
                 page_type: PageType.LANDING,
                 referrer_page: pageId,
                 referrer_page_url: page.url(),

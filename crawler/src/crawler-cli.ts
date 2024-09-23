@@ -122,8 +122,8 @@ const optionsDefinitions: commandLineUsage.OptionDefinition[] = [
   {
     name: 'headless',
     type: String,
-    description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "new". (Default: new)',
-    defaultValue: "new",
+    description: 'Which Puppeteer headless mode the crawler should run in. Either "true", "false", or "shell" (default: "true")',
+    defaultValue: "true",
     group: 'chromeOptions',
   },
   {
