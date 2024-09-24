@@ -218,15 +218,17 @@ async function main() {
       }
 
       if (!flags.profileOptions.newProfileDir) {
-        log.info(`Writing profile to temp location (tmp-${flags.profileOptions.profileDir})`);
-        await fs.cp(containerProfileLoc, `tmp-${flags.profileOptions.profileDir}`, {
+        let tempLocation = `${flags.profileOptions.profileDir}-tmp`
+
+        log.info(`Writing profile to temp location (${tempLocation}`);
+        await fs.cp(containerProfileLoc, tempLocation, {
           recursive: true,
           filter: filterInvalidFiles
         });
         log.info('Deleting old profile');
         await fs.rm(flags.profileOptions.profileDir, { recursive: true });
         log.info(`Moving temp profile to original location (${flags.profileOptions.profileDir})`);
-        await fs.rename(`tmp-${flags.profileOptions.profileDir}`, flags.profileOptions.profileDir);
+        await fs.rename(tempLocation, flags.profileOptions.profileDir);
       } else {
         log.info(`Writing profile to new location (${flags.profileOptions.newProfileDir})`);
         await fs.cp(containerProfileLoc, flags.profileOptions.newProfileDir, {
