@@ -2,9 +2,9 @@
 # Visit https://bit.ly/cffinit to generate yours today!
 
 cff-version: 1.2.0
-title: "adscraper: A Web Crawler for Measuring Online Ad Content"
+title: "Adscraper: A Web Crawler for Measuring Online Ad Content"
 message: >-
-  If you used adscraper in your research, please cite this
+  If you used Adscraper in your research, please cite this
   repository!
 type: software
 authors:

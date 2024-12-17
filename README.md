@@ -56,11 +56,13 @@ If you used Adscraper in your research project, please cite the repository
 using the following BibTeX:
 
 ```bibtex
-@software{Eric_Zeng_adscraper,
-author = {Eric Zeng},
-license = {MIT},
-title = {{adscraper: A Web Crawler for Measuring Online Ad Content}},
-url = {https://github.com/UWCSESecurityLab/adscraper}
+@software{Zeng_adscraper,
+  author = {Eric Zeng},
+  license = {MIT},
+  title = {Adscraper: A Web Crawler for Measuring Online Ad Content},
+  url = {https://github.com/UWCSESecurityLab/adscraper},
+  version = {1.0.0},
+  date = {YYYY-MM-DD}
 }
 ```
 
