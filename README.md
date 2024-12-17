@@ -1,62 +1,58 @@
-# adscraper: A Web Crawler for Measuring Online Ad Content
+# Adscraper: A Web Crawler for Measuring Online Ad Content
 
-**adscraper** is a tool for scraping online ads. Given a website (or a list of
-websites), it opens the website in a Chromium browser, and takes a screenshot
-and saves the HTML content of each ad on the page.
-
-- [adscraper: A Web Crawler for Measuring Online Ad Content](#adscraper-a-web-crawler-for-measuring-online-ad-content)
-  - [Introduction](#introduction)
-    - [Research using adscraper](#research-using-adscraper)
-    - [Warning: Research Code!](#warning-research-code)
+- [Adscraper: A Web Crawler for Measuring Online Ad Content](#adscraper-a-web-crawler-for-measuring-online-ad-content)
+  - [About Adscraper](#about-adscraper)
+    - [Research using Adscraper](#research-using-adscraper)
     - [Citations](#citations)
-  - [Setup](#setup)
-    - [Prerequisites](#prerequisites)
+    - [Warning: Research Code!](#warning-research-code)
+  - [Usage (basic crawls)](#usage-basic-crawls)
+    - [Pre-requisites](#pre-requisites)
     - [Installation](#installation)
-  - [Crawler Usage](#crawler-usage)
-    - [Create input file(s) and output directories](#create-input-files-and-output-directories)
-    - [Running a basic crawl to scrape ads](#running-a-basic-crawl-to-scrape-ads)
-    - [Collecting ad URLs and landing pages](#collecting-ad-urls-and-landing-pages)
-    - [Using profiles](#using-profiles)
-    - [Advanced example: collecting ads and landing pages in separate profiles](#advanced-example-collecting-ads-and-landing-pages-in-separate-profiles)
-    - [Resuming a failed crawl](#resuming-a-failed-crawl)
-    - [Other command line options](#other-command-line-options)
-  - [Running distributed crawls](#running-distributed-crawls)
+    - [Creating a crawl list](#creating-a-crawl-list)
+    - [Running crawls](#running-crawls)
+    - [Detailed instructions and advanced usage](#detailed-instructions-and-advanced-usage)
+  - [Usage (distributed crawls)](#usage-distributed-crawls)
+    - [Pre-requisites](#pre-requisites-1)
+    - [Creating input files](#creating-input-files)
+    - [Running a crawl](#running-a-crawl)
+    - [Detailed instructions and advanced usage](#detailed-instructions-and-advanced-usage-1)
+  - [Viewing and analyzing data](#viewing-and-analyzing-data)
 
-## Introduction
+## About Adscraper
 
-Adscraper is a Node.js script that uses the
-[puppeteer](https://github.com/puppeteer/puppeteer) library to automatically
-browse and collect ad data. You can use the crawler via the command line to
-crawl a single site, or you can use it as part of your own Node.JS script.
+Adscraper is an open source research tool for automatically
+scraping the content of ads on the web.
+Given a list of URLs, Adscraper visits each URL in a Chromium browser,
+and can collect the following data about the ads that appear of the page:
 
-The adscraper **crawl-cluster** uses Kubernetes to orchestrate
-crawls across multiple crawler instances. This allows multiple crawls to be
-queued and run in parallel across multiple nodes in a Kubernetes cluster.
-This useful if you plan to run many crawls across different browsing profiles.
+- Screenshots of ads
+- Ad URLs
+- Ad landing pages
+- Third-party tracking requests
 
-### Research using adscraper
 
-adscraper has been used to conduct research measuring and auditing the online
-ads ecosystem. You can read about some of the projects that used adscraper below:
+The core Adscraper crawler is a Node.js script, powered by [Puppeteer](https://github.com/puppeteer/puppeteer),
+a browser automation library for the Chromium browser.
+You can run a small number
+of crawlers using this script directly.
+For bigger experiments, you can run many parallel crawler
+instances, distributed across multiple workers,
+using the **crawl-cluster** tool, which runs Adscraper as a Kubernetes Job workload.
 
-- [(Project website) Bad Ads: Problematic Content in Online Advertising](https://badads.cs.washington.edu)
+### Research using Adscraper
+
+Adscraper has been used to conduct research measuring and auditing the online
+ads ecosystem. You can read about some of the projects that used Adscraper below:
+
+- [(Paper) Analyzing the (In)Accessibility of Online Advertisements](https://dl.acm.org/doi/10.1145/3646547.3688427)
 - [(Paper) Polls, Clickbait, and Commemorative $2 Bills: Problematic Political Advertising on News and Media Websites Around the 2020 U.S. Elections](https://badads.cs.washington.edu/political.html)
+- [(Project website) Bad Ads: Problematic Content in Online Advertising](https://badads.cs.washington.edu)
 - [(Paper) What Makes a "Bad" Ad? User Perceptions of Problematic Online Advertising](https://badads.cs.washington.edu/files/Zeng-CHI2021-BadAds.pdf)
 - [(Paper) Bad News: Clickbait and Deceptive Ads on News and Misinformation Websites](https://badads.cs.washington.edu/files/Zeng-ConPro2020-BadNews.pdf)
 
-### Warning: Research Code!
-
-`adscraper` is not  production quality code - most of this was written for our
-specific research projects, and may not work for your specific use case, and
-may contain various bugs and defects.
-
-If you are running into issues with the code or documentation, please let us
-know by filing an issue or asking a question in the discussions. I will also
-accept pull requests for fixing bugs, doc bugs, or making the project more
-generally usable and configurable.
-
 ### Citations
-If you used adscraper in your research project, please cite the repository
+
+If you used Adscraper in your research project, please cite the repository
 using the following BibTeX:
 
 ```bibtex
@@ -68,47 +64,45 @@ url = {https://github.com/UWCSESecurityLab/adscraper}
 }
 ```
 
-## Setup
+### Warning: Research Code!
 
-### Prerequisites
+Adscraper is a research tool, and may contain bugs!
+If you are running into issues with the code or documentation, please let us
+know by filing an issue or asking a question in the discussions. I will also
+accept pull requests for fixing bugs, doc bugs, or making the project more
+generally usable and configurable.
 
-To run adscraper, you must have the following software installed:
+## Usage (basic crawls)
+
+For detailed instructions on how to set up Adscraper, please read
+**[crawler/README.md](crawler/README.md)**.
+
+### Pre-requisites
+
+To run Adscraper, you must have the following software installed:
 
 - Node.js
-- TypeScript
 - PostgreSQL
-- Docker (for isolated/parallel crawls via [crawl-coordinator](crawl-coordinator))
 
 ### Installation
 
-This section will help you install and configure adscraper. For our initial
-release, adscraper will be a Node.js script that you run directly out of the
-repository, but in the future, we may refactor it into a library that you
-can use in your own project.
-
-**Get the source code**.
-First, clone this repository.
+First, clone the project, install dependencies, and build the project:
 
 ```sh
 git clone https://github.com/UWCSESecurityLab/adscraper.git
+cd adscraper/crawler
+npm install
+npm run build
 ```
 
-**Set up the database.**
-Next, create a Postgres database, using the schema specified in
-[adscraper.sql](adscraper.sql). Metadata from crawls will be stored
-in here. You can either copy the code into the `psql` command line, or run
-the following command:
+Then, create tables in the Postgres database to store the metadata from the crawls.
 
 ```sh
+cd ../..
 psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
-This creates a database named `adscraper` and populates it with the tables
-and indices provided.
-
-Then, create a JSON file containing the authentication
-credentials for your Postgres server. The format of the JSON file is the
-[config file used by node-postgres](https://node-postgres.com/apis/client#new-client). For example:
+Lastly, create a JSON file named `pg_conf.json` containing the authentication credentials for your Postgres database.
 
 ```json
 {
@@ -120,221 +114,221 @@ credentials for your Postgres server. The format of the JSON file is the
 }
 ```
 
-**Build the project.**
-Lastly, install the Node dependencies and compile the code in the `crawler` directory.
+### Creating a crawl list
 
-```sh
-cd crawler
-npm install
-npm run build
-```
-
-## Crawler Usage
-
-This is a guide for running individual crawler instances using `crawler`.
-
-### Create input file(s) and output directories
-
-First, you need to create a **crawl list** - the URLs that the crawler will visit.
-The format is a text file containing one URL per line. For example:
+Next, create a **crawl list** - the URLs that the crawler will visit.
+The format is a text file containing one URL per line. For example, a crawl list named `crawl_list.txt` might look like:
 
 ```txt
 https://www.nytimes.com/
 https://www.cnn.com/
+https://www.espn.com/
+https://www.stackoverflow.com/
 ```
 
-Next, create an **output directory**, where the crawler will save screenshots,
-HTML files, and MHTML snapshots. Other metadata will be stored in the
-Postgres database. The structure of the directory, when populated,
-will look like this:
+### Running crawls
 
-```txt
-output_dir/
-├─ <crawl name>/
-│  ├─ scraped_ads/
-│  │  ├─ ad_<id>/
-│  │  │  ├─ ad_<id>.webp
-│  │  │  ├─ ad_<id>_landing_page_screenshot.webp
-│  │  │  ├─ ad_<id>_landing_page_content.html
-│  │  │  ├─ ad_<id>_landing_page_snapshot.mhtml
-│  ├─ scraped_pages/
-│  │  ├─ <url>/
-│  │  │  ├─ <url>_screenshot.webp
-│  │  │  ├─ <url>_content.html
-│  │  │  ├─ <url>_snapshot.mhtml
-```
-
-### Running a basic crawl to scrape ads
-
-Now that the inputs, outputs, and database are set up, we can run some
-crawls. The simplest crawl configuration is to scrape screenshots of ads from
-a list of URLs, using the `--scrape_ads` options.
+From the `crawler/` directory, run the ``crawler-cli'' script to start the crawl.
+This script will scrape the content of the ads on the pages in the crawl list,
+and click on the ads to get the Ad URL, but block the ads from opening.
 
 ```sh
 node gen/crawler-cli.js \
-    --name example_crawl_name \
+    --name my_crawl_name \
     --output_dir /path/to/your/output/dir \
-    --crawl_list /path/to/your/crawl/list \
-    --pg_conf_file /path/to/your/postgres/config \
-    --scrape_ads \
-    --click_ads=noClick
-```
-
-The ads will be stored in the `ad` table in the database. Additionally,
-screenshots of the ads will be stored in
-`<output_dir>/<crawl_name>/scraped_ads/ad_<id>`, using the same id as in Postgres.
-The `ad` table also contains the path to the screenshot under the `screenshot`
-column.
-
-Additionally, if we want screenshots/snapshots of the pages the ads appeared on,
-we can add the `--scrape_site` option.
-
-```sh
-node gen/crawler-cli.js \
-    --name example_crawl_name \
-    --output_dir /path/to/your/output/dir \
-    --crawl_list /path/to/your/crawl/list \
-    --pg_conf_file /path/to/your/postgres/config \
-    --scrape_ads \
-    --scrape_site \
-    --click_ads=noClick
-```
-
-Pages will be stored in the `page` table in the database, and the
-`scraped_pages` directory in the output directory. The crawler saves the
-main HTML document, a full-page screenshot, and an MHTML snapshot, which
-you can open offline in Chrome.
-
-### Collecting ad URLs and landing pages
-
-You can also collect data on the landing pages of ads, using the `--click_ads`
-option. There are three possible values:
-
-- `noClick` is the default value. When set to this, ads are not clicked and no
-data on the landing page or URL is collected.
-
-- `clickAndBlockLoad` will tell the crawler to click on each ad, to find the
-initial ad URL (e.g. `https://www.googleadservices.com/pagead/aclk?...`),
-but it will prevent the navigation request from loading.
-The URL will be stored in the `url` column in the `ad` table. \
-\
-This option lets you collect the URL without actually visiting the ad,
-and potentially biasing your browsing profile, or causing it to be recorded as
-a click by the ad networks. However, it also means that you do not necessarily
-see the actual landing page
-URL, which may be several steps further in a redirect chain.
-
-- `clickAndScrapeLandingPage` will tell the crawler to click on each ad, load
-the landing page, and the scrape the content of the landing page. The initial
-ad url will be stored in the `url` column in the `ad` table, and the landing page
-url will be stored in the `url` column of the `page` table, and that page will
-have a reference to the ad it was linked from in the `referrer_ad` column.\
-\
-This option gives you the content of the landing page and it's URL. However,
-it does mean that your browsing profile will be biased by this ad click.
-Additionally, consider that this is recorded as a real ad engagement, which
-may cause your crawler be flagged as a bot for performing fraudulent clicks.
-
-### Using profiles
-
-You can specify the browsing profile used by the crawler, using the
-`---profile_dir` option. This directly sets the `--user_data_dir` option
-for Chromium, which is the folder Chrome uses to store persistent storage, like
-cookies and history. If no profile is specified, it will create a temporary
-profile in `/tmp`. If the folder specified does not exist, it will be automatically
-created.
-
-Warning: if the browser crashes during a crawl, it may corrupt the profile
-directory.
-
-### Advanced example: collecting ads and landing pages in separate profiles
-
-The `--profile_dir` and `--click_ads` options can be used in conjunction
-to collect landing page data without biasing the profile that the ads
-are collected from by clicking on the ads.
-
-First, crawl your crawl list using `--click_ads clickAndBlockLoad`. This
-gets the URLs of the ads without loading them.
-
-```sh
-node gen/crawler-cli.js \
-    --name ad_crawl \
-    --profile_dir /path/to/ad_scraping/profile
-    --output_dir /path/to/your/output/dir \
-    --crawl_list /path/to/your/crawl/list \
-    --pg_conf_file /path/to/your/postgres/config \
+    --crawl_list /path/to/your/crawl_list.txt \
+    --pg_conf_file /path/to/your/pg_conf.json \
     --scrape_ads \
     --click_ads=clickAndBlockLoad
 ```
+The data will be stored in two places:
+1. Crawl metadata is stored in the Postgres database
+   - e.g.. for each ad, the ad URL, the
+page the ad appeared on, when the ad was crawled
+2. The screenshots of ads and HTML content of pages is stored in the directory `output_dir`.
+   - The location of these files are specified in the metadata for each ad and page, in the columns `ad.screenshot`, `page.screenshot`, `page.html`, etc.
 
-Then, get a list of ad URLs using a SQL query:
+
+### Detailed instructions and advanced usage
+
+For detailed instructions on how to set up Adscraper, and examples of different
+types of crawls you can run to answer different research questions, please read
+**[crawler/README.md](crawler/README.md)**.
+
+## Usage (distributed crawls)
+
+Do you need to run tens, or even hundreds of crawls with different browser profiles?
+Or do you need to parallelize crawls over thousands of URLs? The crawl-cluster tool
+is a Kubernetes-based solution for deploying Adscraper crawl jobs in parallel
+across multiple machines.
+
+crawl-cluster is a script that takes a JSON crawl specification file as input,
+and automatically generates and launches a Kubernetes Job, which automatically
+deploys Adscraper crawler instances to a Kubernetes cluster.
+
+### Pre-requisites
+
+To run a Adscraper cluster, you must run the following services:
+
+- Kubernetes on each node (Recommended distribution: [k3s](https://k3s.io/))
+- A PostgreSQL database server, set up as described in the basic crawl instructions
+- A distributed file system or server (e.g. NFS, SMB/CIFS)
+
+### Creating input files
+
+Distributed crawls are configured using a JSON file, that specifies the
+crawler options, as well as the profiles and URLs to crawl.
+
+For example, let's say you wanted to crawl ads shown to two hypothetical browsing profiles:
+one for a user interested in sports and another for a user interested in cooking.
+
+First, create the _crawl lists_ for each profile:
+
+**sports_crawl_list.txt**:
+
+```txt
+https://www.espn.com
+https://www.nba.com
+https://www.mlb.com
+```
+
+**cooking_crawl_list.txt**:
+
+```txt
+https://www.seriouseats.com
+https://www.foodnetwork.com
+https://www.allrecipes.com
+```
+
+Then, you can create a _job specification_, that specifies the crawler behavior,
+and which profiles and crawl lists to use:
+
+**example-job.json**:
+
+```json
+{
+  "jobName": "example-crawl",
+  "dataDir": "/home/pptruser/data",
+  "maxWorkers": 2,
+  "profileOptions": {
+    "useExistingProfile": false,
+    "writeProfileAfterCrawl": true
+  },
+  "crawlOptions": {
+    "shuffleCrawlList": false,
+    "findAndCrawlPageWithAds": 0,
+    "findAndCrawlArticlePage": false
+  },
+  "scrapeOptions": {
+    "scrapeSite": false,
+    "scrapeAds": true,
+    "clickAds": "clickAndBlockLoad",
+    "captureThirdPartyRequests": true
+  },
+  "profileCrawlLists": [
+    {
+      "crawlName": "profile_crawl_sports",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/sports_crawl_list.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/sports_profile"
+    },
+    {
+      "crawlName": "profile_crawl_cooking",
+      "crawlListFile": "/home/pptruser/data/inputs/example-job/cooking_crawl_list.txt",
+      "crawlListHasReferrerAds": false,
+      "profileDir": "/home/pptruser/data/profiles/cooking_profile"
+    },
+  ]
+}
+```
+
+Place these input files in a folder on the distributed file system, so that they
+can be read by the Kubernetes workers.
+
+### Running a crawl
+
+To start the job, run the `runIndexedJob.js` script:
+
+```sh
+cd adscraper/crawl-cluster/cli
+npm install
+npm run build
+
+node gen/runIndexedJob.js -j /path/to/your/example-job.json -p /path/to/your/pg_conf.json
+```
+
+To monitor the progress of the job, you can use the `kubectl` command to view
+the status of the crawl worker containers:
+
+```sh
+# To view overall job progress
+kubectl describe job <job-name>
+
+# To view statuses of each crawl instance
+kubectl get pods -o wide -l job-name=<job-name>
+
+# View active crawl instances
+kubectl get pods -o wide --field-selector status.phase=Running
+
+# To view the logs of a specific crawler (for debugging)
+kubectl logs <pod-name>
+```
+
+Like in the basic crawl, the data is stored in two places:
+
+1. Crawl metadata is stored in the PostgreSQL database
+2. The screenshots of ads and HTML content of pages is stored in the directory `dataDir`,
+   which is a location in the distributed file system.
+
+### Detailed instructions and advanced usage
+
+For full instructions on setting up the cluster and running crawls
+refer to the documentation in **[crawl-cluster/README.md](crawl-cluster/README.md)**.
+
+
+
+## Viewing and analyzing data
+
+Though there is no built-in tool for analyzing crawl data, you can use SQL queries
+to export the data from the Postgres database, and use your favorite data
+analysis tool, like Pandas or R, to analyze the data.
+
+For example, for the example crawl above, you can run the following
+commands in PSQL to export CSVs containing the metadata for the ads and their parent pages:
 
 ```sql
-\copy (SELECT id AS ad_id, url FROM ad WHERE ad.crawl_id=<crawl_id> AND url IS NOT NULL) to ad_urls.csv csv header;
+\copy(SELECT page.id as page_id, crawl_id, url, original_url FROM page JOIN crawl ON page.crawl_id = crawl.id WHERE crawl.name = 'my_crawl_name') to 'ads.csv' csv header;
+
+\copy(SELECT ad.id as ad_id, crawl_id, parent_page, url as ad_url, screenshot FROM ad JOIN crawl ON ad.crawl_id = crawl.id WHERE crawl.name = 'my_crawl_name') to 'pages.csv' csv header;
 ```
 
-This returns a CSV with the columns ad_id and url. This can be used as a crawl
-list using the special option, `--crawl_list_with_referrer_ads`. This associates
-each URL in the crawl list as the landing page for the given ad id, so the
-landing page screenshots will be stored in the same folder as the ad, and the
-database entries for the landing pages will have the correct referrer ad.
+Then, in pandas, you can read and analyze the metadata yourself:
 
-So using `ad_urls.csv`, run a second crawl with a different profile, and
-with `--scrape_site` to capture the landing page content, and `--crawl_list_with_referrer_ads`
-instead of `--crawl_list`.
+```python
+import pandas as pd
 
-```sh
-node gen/crawler-cli.js \
-    --name example_crawl_name \
-    --profile_dir /path/to/landing_page_scraping/profile
-    --output_dir /path/to/your/output/dir \
-    --crawl_list_with_referrer_ads /path/to/ad_urls.csv \
-    --pg_conf_file /path/to/your/postgres/config \
-    --scrape_site \
-    --click_ads=noClick
+# Read CSVs
+ads = pd.read_csv('ads.csv')
+pages = pd.read_csv('pages.csv')
+
+# Merge ad and page tables
+df = pd.merge(ads, pages, left_on='parent_page', right_on='page_id')
+
+# Count ads per parent page
+print(df['url'].value_counts())
+
+# Count most popular ad URL domains
+import urllib.parse
+print(df['ad_url'] \
+  .apply(lambda x: urllib.parse.urlparse(x).netloc) \
+  .value_counts())
 ```
 
-### Resuming a failed crawl
+To answer more complex research questions about the content of ads, you will
+likely need to label the ads. This is beyond the scope of this project, but
+in past research projects, we've used tools and methods like:
 
-If the crawl terminates unexpectedly for some reason, you can resume the crawl
-where it left off, by adding the `--crawl_id` flag, with the id of the crawl
-in the database. The crawler records how much progress was made in the
-crawl list, and will pick up where it left off. You must provide the same
-crawl list with the same filename and length.
-
-You can find the id of the crawl by querying the `crawl` table in Postgres.
-
-```SQL
-SELECT * FROM crawl;
-```
-
-```sh
-node gen/crawler-cli.js \
-    --crawl_id 24
-    --name example_crawl_name \
-    --output_dir /path/to/your/output/dir \
-    --crawl_list /path/to/your/crawl/list \
-    --pg_conf_file /path/to/your/postgres/config \
-    --scrape_ads \
-    --scrape_site \
-    --click_ads=noClick
-```
-
-### Other command line options
-
-For documentation of other command line options, use the `--help` option.
-
-```sh
-node gen/crawler-cli.js --help
-```
-
-
-## Running distributed crawls
-
-Need to run 10s, or even 100s of crawls with different profiles? Or do you need
-to parallelize crawls over thousands of URLs? The crawl-cluster directory
-contains a Kubernetes-based solution for running parallel crawls, distributed
-across multiple nodes.
-
-Refer to the documentation in [crawl-cluster/README.md](crawl-cluster/README.md)
-for more information.
+- Manually labeling ad screenshots and landing pages using [Label Studio](https://labelstud.io/)
+- Using OCR to extract text from ad screenshots, and using NLP tools like
+  text classifiers, topic models, and LLMs to identify topics
+- Scraping the landing pages of ads, and using NLP tools to identify topics
