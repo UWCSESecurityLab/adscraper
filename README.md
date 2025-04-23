@@ -31,7 +31,6 @@ and can collect the following data about the ads that appear of the page:
 - Ad landing pages
 - Third-party tracking requests
 
-
 The core Adscraper crawler is a Node.js script, powered by [Puppeteer](https://github.com/puppeteer/puppeteer),
 a browser automation library for the Chromium browser.
 You can run a small number
@@ -45,6 +44,7 @@ using the **crawl-cluster** tool, which runs Adscraper as a Kubernetes Job workl
 Adscraper has been used to conduct research measuring and auditing the online
 ads ecosystem. You can read about some of the projects that used Adscraper below:
 
+- [(Paper) Measuring Risks to Users' Health Privacy Posed by Third-Party Web Tracking and Targeted Advertising](https://doi.org/10.1145/3706598.3714318)
 - [(Paper) Analyzing the (In)Accessibility of Online Advertisements](https://dl.acm.org/doi/10.1145/3646547.3688427)
 - [(Paper) Polls, Clickbait, and Commemorative $2 Bills: Problematic Political Advertising on News and Media Websites Around the 2020 U.S. Elections](https://badads.cs.washington.edu/political.html)
 - [(Project website) Bad Ads: Problematic Content in Online Advertising](https://badads.cs.washington.edu)
