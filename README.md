@@ -5,18 +5,19 @@
     - [Research using Adscraper](#research-using-adscraper)
     - [Citations](#citations)
     - [Warning: Research Code!](#warning-research-code)
-  - [Usage (basic crawls)](#usage-basic-crawls)
+  - [Quick Start (basic crawls)](#quick-start-basic-crawls)
     - [Pre-requisites](#pre-requisites)
     - [Installation](#installation)
     - [Creating a crawl list](#creating-a-crawl-list)
     - [Running crawls](#running-crawls)
     - [Detailed instructions and advanced usage](#detailed-instructions-and-advanced-usage)
-  - [Usage (distributed crawls)](#usage-distributed-crawls)
+  - [Quick Start (distributed crawls)](#quick-start-distributed-crawls)
     - [Pre-requisites](#pre-requisites-1)
     - [Creating input files](#creating-input-files)
     - [Running a crawl](#running-a-crawl)
     - [Detailed instructions and advanced usage](#detailed-instructions-and-advanced-usage-1)
   - [Viewing and analyzing data](#viewing-and-analyzing-data)
+  - [Acknowledgements](#acknowledgements)
 
 ## About Adscraper
 
@@ -74,9 +75,9 @@ know by filing an issue or asking a question in the discussions. I will also
 accept pull requests for fixing bugs, doc bugs, or making the project more
 generally usable and configurable.
 
-## Usage (basic crawls)
+## Quick Start (basic crawls)
 
-For detailed instructions on how to set up Adscraper, please read
+Here are instructions for running a basic crawl using a single Adscraper instance. More detailed documentation can be found in
 **[crawler/README.md](crawler/README.md)**.
 
 ### Pre-requisites
@@ -157,16 +158,18 @@ For detailed instructions on how to set up Adscraper, and examples of different
 types of crawls you can run to answer different research questions, please read
 **[crawler/README.md](crawler/README.md)**.
 
-## Usage (distributed crawls)
+## Quick Start (distributed crawls)
 
 Do you need to run tens, or even hundreds of crawls with different browser profiles?
-Or do you need to parallelize crawls over thousands of URLs? The crawl-cluster tool
-is a Kubernetes-based solution for deploying Adscraper crawl jobs in parallel
-across multiple machines.
+Or do you need to parallelize crawls over thousands of URLs? The crawl-cluster tool uses Kubernetes to deploy multiple Adscraper workers to run large crawl jobs.
 
 crawl-cluster is a script that takes a JSON crawl specification file as input,
 and automatically generates and launches a Kubernetes Job, which automatically
 deploys Adscraper crawler instances to a Kubernetes cluster.
+
+The following instructions will help you set up the crawl-cluster
+infrastructure. For detailed documentation, please refer to
+**[crawl-cluster/README.md](crawl-cluster/README.md)**.
 
 ### Pre-requisites
 
@@ -334,3 +337,19 @@ in past research projects, we've used tools and methods like:
 - Using OCR to extract text from ad screenshots, and using NLP tools like
   text classifiers, topic models, and LLMs to identify topics
 - Scraping the landing pages of ads, and using NLP tools to identify topics
+
+## Acknowledgements
+
+Adscraper was developed by Eric Zeng
+at the University of Washington
+and Carnegie Mellon University.
+
+This project was supported in part by the National Science Foundation under Awards CNS-1565252, CNS-1651230, and CNS-2041894;
+the U.S. Army Research Office under MURI grant W911NF-21-1-0317;
+the Penn Medical Communications Research Institute;
+the UW Center for Informed Public;
+the John S. and James L. Knight Foundation;
+and the UW Tech Policy Lab, which receives support from: the
+William and Flora Hewlett Foundation, the John D. and Catherine T.
+MacArthur Foundation, Microsoft, the Pierre and Pamela Omidyar
+Fund at the Silicon Valley Community Foundation.
