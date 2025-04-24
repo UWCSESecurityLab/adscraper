@@ -104,15 +104,14 @@ output_dir/
 ├─ <crawl name>/
 │  ├─ scraped_ads/
 │  │  ├─ ad_<id>/
-│  │  │  ├─ ad_<id>.webp
-│  │  │  ├─ ad_<id>_landing_page_screenshot.webp
-│  │  │  ├─ ad_<id>_landing_page_content.html
-│  │  │  ├─ ad_<id>_landing_page_snapshot.mhtml
+│  │  │  ├─ ad_<ad_id>.webp
+│  │  │  ├─ ad_<ad_id>_landing_page_screenshot.webp
+│  │  │  ├─ ad_<ad_id>_landing_page_content.html
+│  │  │  ├─ ad_<ad_id>_landing_page_snapshot.mhtml
 │  ├─ scraped_pages/
-│  │  ├─ <url>/
-│  │  │  ├─ <url>_screenshot.webp
-│  │  │  ├─ <url>_content.html
-│  │  │  ├─ <url>_snapshot.mhtml
+│  │  ├─ <url_escaped>/
+│  │  │  ├─ <uuid>_screenshot.webp
+│  │  │  ├─ <uuid>_document.html
 ```
 
 ### Running a basic crawl to scrape ads
@@ -270,6 +269,18 @@ node gen/crawler-cli.js \
     --scrape_site \
     --click_ads=noClick
 ```
+
+## Viewing crawl results
+
+The outputs of the crawl will be stored in the Postgres database and the
+output directory specified in the command line options (`--output_dir`).
+
+The database contains metadata for the crawls: profiles, pages, ads, and
+third party requests. See [adscraper.sql](../adscraper.sql)
+for the schema of the database. You can use SQL queries to extract the data into
+a CSV file, and then analyze the data in Pandas, R, or whatever tool you prefer.
+The database also contains references to the path of the screenshot and HTML files
+for each page and ad (relative to the original output directory).
 
 ## Customizing the crawler
 

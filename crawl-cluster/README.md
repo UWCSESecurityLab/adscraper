@@ -54,70 +54,82 @@ On the database server:
 
 ## Setup
 
-### Setting up the cluster
 
+### 1. Installing Kubernetes
 First, you will need to set up a Kubernetes cluster, which will manage the
 crawl jobs, as well as database and storage services, for collecting crawl data.
 
-1. Set up Kubernetes on your nodes:
+Start by setting up Kubernetes on each node:
    - Follow the [k3s quickstart guide](https://docs.k3s.io/quick-start)
      for instructions on setting up a k3s cluster.
    - Ideally: set up a separate control plane node, and worker nodes for the
-     crawlers
-   - On your control plane node, indicate which nodes can be used to crawl by running:
+     crawlers. This is not strictly necessary, but can prevent the crawlers
+     from taking down the cluster if they consume too many resources.
+   - On your control plane node, indicate which nodes are valid workers by running
+     the following command for each worker node:
 
 ```sh
-kubectl label node <node-name> crawler=true
+kubectl label node <worker-node-name> crawler=true
 ```
+### 2. Setting up a network storage volume
+The crawl cluster needs a shared storage volume that all crawler instances
+can access, so that they can read input files, and write scraped ad data
+to the same location.
 
-2. Set up a storage volume for storing inputs and outputs.
-    - The crawl cluster needs a shared storage volume that all crawler instances
-      can access, so that they can read input files, and write scraped ad data
-      to the same location.
-    - If you are running on a single node, you can designate a directory on
-      your machine as a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
-      volume.
-    - If you are running on multiple nodes, you will need to set up a network
-      storage volume. Refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes)
-      for setting up volumes and drivers.
-    - Once you have set up your local or network storage volume,
-      to register your volume with adscraper, edit
-      [config/indexed-job.yaml](config/indexed-job.yaml)
-      and add your volume to `.spec.template.spec.volumes`,
-      using the name `adscraper-storage`.
+  - If you are running on a single node, you can designate a directory on
+    your machine as a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
+    volume.
+  - If you are running on multiple nodes, you will need to set up a network
+    storage volume. Refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes)
+    for setting up volumes and drivers.
+  - Once you have set up your local or network storage volume,
+    to register your volume with adscraper, edit
+    [config/indexed-job.yaml](config/indexed-job.yaml)
+    and add your volume to `.spec.template.spec.volumes`,
+    using the name `adscraper-storage`.
 
-3. Set up a Postgres database (not through Kubernetes)
-    - This database can run anywhere as long as it is accessible to the
-      Kubernetes cluster (no firewalls in the way). I ran it on the control
-      plane server.
-    - Run the queries to create the database, tables, and indexes in [adscraper.sql](../adscraper.sql)
-    - Edit [config/postgres-service.yaml](config/postgres-service.yaml), and replace
-      the `externalName` field with the address of your database,
-      and the `ports` field with the ports of your database. This should be the
-      external IP or hostname of your database server.
-    - Set up the database secrets so that adscraper can access the database:
-      Edit [config/pg-conf-secret.yaml](config/pg-conf-secret.yaml) and replace
-      the `data` fields with the base64-encoded values of your database, user,
-      and password. You can use the `echo -n 'password' | base64` command to
-      encode your values.
-    - Apply the Service and Secret configs:
+### 3. Set up a Postgres database
+
+Postgres is used to store metadata about the crawls. The server
+can run anywhere as long as it is accessible to the
+Kubernetes cluster (no firewalls in the way).
+I have run the database on the control plane node, as a standalone service
+(not in a Kubernetes pod), but in theory you can run it in Kubernetes if you prefer.
+
+After you have set up a Postgres server, follow these steps:
+  - Run the queries to create the database, tables, and indexes in [adscraper.sql](../adscraper.sql)
+  - Edit [config/postgres-service.yaml](config/postgres-service.yaml), and replace
+    the `externalName` field with the address of your database,
+    and the `ports` field with the ports of your database. This should be the
+    external IP or hostname of your database server.
+  - Set up the database secrets so that adscraper can access the database:
+    Edit [config/pg-conf-secret.yaml](config/pg-conf-secret.yaml) and replace
+    the `data` fields with the base64-encoded values of your database, user,
+    and password. You can use the `echo -n 'password' | base64` command to
+    encode your values.
+  - Apply the Service and Secret configs:
 
 ```sh
 kubectl apply -f config/postgres-service.yaml
 kubectl apply -f config/postgres-secret.yaml
 ```
 
-1. Set up network policy to allow adscraper
-   containers to access the internet. This changes the network policy to allow
-   egress traffic.
+### 4. Set up the network policy for crawler pods
+Next, we need to set up the Kubernetes network policy to allow Adscraper
+containers to access the internet. This changes the network policy to allow
+egress traffic.
 
 ```sh
 kubectl apply -f config/network-policy.yaml
 ```
 
+## Usage
+
+Next, we will cover how to set up and run a crawl job.
+
 ### Creating crawler inputs
 
-Next, create input files to define your crawl jobs. Each crawl job contains
+First, create input files to define your crawl jobs. Each crawl job contains
 two components:
 
 - Crawl lists: one or more text files containing a list of URLs to crawl
@@ -154,12 +166,126 @@ as the crawler instances need to be able to read them from disk.
 
 #### Job Specification File
 
-The job specification file is a JSON file that contains crawler configurations,
-and the crawl lists that should be used.
-[src/jobSpec.ts](src/jobSpec.ts) contains a TypeScript interface for the
-job specification file.
+In the job specification file is a JSON file. In this file, you will specify
+the crawl lists to use, and configure the behavior of the crawlers.
 
-TODO: describe schemas and configuration options, provide examples
+[src/jobSpec.ts](src/jobSpec.ts) contains the TypeScript interface for the
+job specification file. Below is a summary of the fields in the job specification.
+
+
+##### JobSpec
+This is the entry point for the job specification file. Here, you can specify
+the job name, output directories, and amount of parallelism. Additionally,
+you can specify one of three types of crawls:
+
+- Isolated crawls: provide a single crawl list file to `crawl_list`. Each URL will be crawled with a clean profile (i.e., a new container will be created to crawl each URL, and then destroyed).
+
+- Profile-based crawls: provide multiple crawl list files, one for each profile,
+  to `profileCrawlLists`. Each profile will be crawled with a separate browsing
+  profile that will keep state between crawls. The profiles will be stored in the output directory afterwards.
+
+- Ad landing page crawls: provide a CSV file with columns `ad_id` and `url` to `adUrlCrawlList`. Each URL will be crawled with a clean profile, and the collected data
+  will be associated with an ad_id from a previous crawl.
+
+| Name                  | Type                | Description                                                                                     |
+|-----------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `jobName`             | `string`           | Unique name for your job. If this job exists in the database, it resumes a crashed job.         |
+| `hostDataDir`         | `string`           | Directory on the host where screenshots, logs, and scraped content should be stored.           |
+| `containerDataDir`    | `string`           | Directory where `hostDataDir` is mounted in the container.                                      |
+| `maxWorkers`          | `number`           | Maximum number of Chromium instances to run in parallel.                                       |
+| `nodeName`            | `string` (optional)| Kubernetes node name where workers are restricted to.                                           |
+| `crawlList`           | `string` (optional)| Path to a file containing URLs to crawl, one per line.                                          |
+| `adUrlCrawlList`      | `string` (optional)| CSV file with columns `ad_id` and `url` for crawling ad URLs.                                   |
+| `profileCrawlLists`   | `ProfileCrawlList[]` (optional) | Array of profile crawl list specifications.                                                   |
+| `profileOptions`      | `ProfileOptions`   | Configuration options for Chrome profiles.                                                     |
+| `crawlOptions`        | `CrawlOptions`     | Options for crawling behavior.                                                                 |
+| `scrapeOptions`       | `ScrapeOptions`    | Options for scraping behavior.                                                                 |
+
+---
+
+##### ProfileOptions
+
+Configuration options for handling profiles. You can specify whether to use
+profiles, whether to save them after the crawl or not, whether to save
+profile checkpoints for long-running crawls (to recover from crawls that crash),
+and whether to use a SOCKS proxy server for all profiles. If you want to
+use a SOCKS proxy server for individual profiles, you can specify it in the
+`ProfileCrawlList` section.
+
+| Name                       | Type                | Description                                                                                     |
+|----------------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `useExistingProfile`       | `boolean` (optional)| Whether to use an existing Chrome profile.                                                     |
+| `writeProfileAfterCrawl`   | `boolean` (optional)| Whether to save the profile after the crawl is complete.                                        |
+| `compressProfileBeforeWrite` | `boolean` (optional)| Whether to compress the profile before saving it.                                              |
+| `profileCheckpointFreq`    | `number` (optional) | Frequency (in seconds) for saving profile checkpoints during a crawl.                          |
+| `proxyServer`              | `string` (optional) | SOCKS proxy server URL for all profiles/crawls in this job.                                     |
+| `sshHost`                  | `string` (optional) | SSH host for creating a tunnel.                                                                |
+| `sshRemotePort`            | `number` (optional) | SSH remote port for creating a tunnel.                                                         |
+| `sshKey`                   | `string` (optional) | File location of the SSH private key (within the container).                                    |
+
+---
+
+##### CrawlOptions
+
+| Name                       | Type      | Description                                                                                     |
+|----------------------------|-----------|-------------------------------------------------------------------------------------------------|
+| `shuffleCrawlList`         | `boolean` | Whether to randomize the order of URLs in the crawl list.                                       |
+| `findAndCrawlPageWithAds`  | `number`  | Number of additional pages with ads to crawl.                                                  |
+| `findAndCrawlArticlePage`  | `boolean` | Whether to crawl an article page linked from the RSS feed or heuristically identified.          |
+| `refreshPage`              | `boolean` | Whether to refresh each page after scraping and scrape it again.                                |
+
+---
+
+##### ScrapeOptions
+
+Configuration options for scraping behavior. Here, you can specify what
+kinds of data to scrape (i.e. ads, pages, third-party requests).
+
+| Name                       | Type                | Description                                                                                     |
+|----------------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `scrapeSite`               | `boolean`          | Whether to scrape the page content (screenshot, HTML, MHTML).                                   |
+| `scrapeAds`                | `boolean`          | Whether to scrape the ads on the page (screenshot, HTML).                                       |
+| `clickAds`                 | `'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage'` | Behavior for clicking ads. |
+| `captureThirdPartyRequests`| `boolean`          | Whether to capture third-party network requests for tracking detection.                         |
+| `screenshotAdsWithContext` | `boolean`          | Whether to include a 150px margin around ads in screenshots for context.                        |
+
+---
+
+##### ProfileCrawlList
+
+This is the interface for specifying a single profile's crawl list and
+crawling configuration. In the full specification file, you will have an array
+of these objects.
+
+Here, you specify the crawl list used, the profile name, where the browsing
+profile is stored, and whether to use a SOCKS proxy server.
+
+When specifying the crawl list, you can either specify a single URL to crawl,
+using the `url` field, or a file containing a list of URLs to crawl,
+using the `crawlListFile` field. You must specify one or the other.
+
+| Name                  | Type                | Description                                                                                     |
+|-----------------------|---------------------|-------------------------------------------------------------------------------------------------|
+| `crawlName`           | `string`           | Name/label for the crawl, used to identify it in the database.                                  |
+| `profileId`           | `string`           | ID for this profile, shared across multiple crawls if needed.                                   |
+| `crawlListFile`       | `string` (optional)| Path to a file containing URLs to crawl.                                                       |
+| `url`                 | `string` (optional)| Single URL to crawl.                                                                            |
+| `profileDir`          | `string` (optional)| Directory of the Chrome user-data-dir for this crawl.                                           |
+| `newProfileDir`       | `string` (optional)| Directory to save the profile after the crawl, if not overwriting the existing profile.         |
+| `proxyServer`         | `string` (optional)| SOCKS proxy server URL for this profile's crawl.                                                |
+| `sshHost`             | `string` (optional)| SSH host for creating a tunnel for this profile's crawl.                                        |
+| `sshRemotePort`       | `number` (optional)| SSH remote port for creating a tunnel for this profile's crawl.                                 |
+| `sshKey`              | `string` (optional)| File location of the SSH private key (within the container).
+
+
+#### Example job specifications
+
+You can view example job specifications in the `test` directory.
+
+In [`test/example-job`](test/example-job), we show example specifications and crawl lists for a two-stage experiment on targeted ads.
+
+1. [`test/example-job/profile_job.json`](test/example-job/profile_job.json): First, we run a profile creation job, where we crawl 3 crawl lists with 3 different profiles (for three interests: sports, cooking, and health).
+2. [`test/example-job/target_job.json`](test/example-job/target_job.json): Then, we run a targeted ad collection job. Using the profiles created in the first job, all three profiles crawl the sites in [`target_sites.txt`](test/example-job/target_sites.txt) and collect the ads that are shown to them.
 
 ### Running crawl jobs
 
