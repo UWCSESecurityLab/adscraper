@@ -1,11 +1,18 @@
+# Crawler script documentation
+
+This README contains documentation for the crawler script, which
+can be used to run individual crawls from the command line (or as a library).
+
+To run multiple crawls in parallel, or to run crawls on a cluster, see the
+[crawl-cluster documentation](../crawl-cluster/README.md).
+
 ## Setup
 
 ### Prerequisites
 
-To run adscraper, you must have the following software installed:
+To run Adscraper, you must have the following software installed:
 
 - Node.js
-- TypeScript
 - PostgreSQL
 
 ### Installation
@@ -17,8 +24,30 @@ First, clone this repository.
 git clone https://github.com/UWCSESecurityLab/adscraper.git
 ```
 
+**Install Node.js dependencies.** Run the following commands to
+install the crawler's dependencies.
+The necessary build dependencies (Typescript, namely) are included.
+
+```sh
+cd adscraper/crawler
+npm install
+npm run build
+```
+
 **Set up the database.**
-Metadata from crawls is stored in a Postgres database. To create the tables, you
+Metadata from crawls is stored in a Postgres database. You must first set up your
+own Postgres server. There are great guides on setting up postgres online:
+
+- [PostgreSQL official documentation](https://www.postgresql.org/)
+- [Postgres.app (MacOS)](https://postgresapp.com/)
+- [Postgres official Docker image](https://hub.docker.com/_/postgres)
+
+There are no special requirements for configuring the Postgres server, as long
+as the Node.js crawler process can connect to it. You can either set it up
+to use Unix sockets or TCP/IP. The username, password, and database name
+are all configurable in the JSON config file (see below).
+
+To create the tables, you
 can either copy the code from [adscraper.sql](adscraper.sql) into the `psql`
 command line, or run the following command in your terminal:
 
@@ -26,6 +55,7 @@ command line, or run the following command in your terminal:
 psql -U <YOUR_POSTGRES_USERNAME> -f ./adscraper.sql
 ```
 
+**Database credentials.**
 Then, create a JSON file containing the authentication
 credentials for your Postgres server. The format of the JSON file is the
 [config file used by node-postgres](https://node-postgres.com/apis/client#new-client).
@@ -241,10 +271,74 @@ node gen/crawler-cli.js \
     --click_ads=noClick
 ```
 
-### Other command line options
+## Command Line Options
 
-For documentation of other command line options, use the `--help` option.
+These are all of the available command line options for the
+CLI interface of the crawler (`src/crawler-cli.js`). These can
+also be passed in as arguments to the `crawl()` function in
+`src/crawler.ts`, if you are using the crawler as a library.
 
-```sh
-node gen/crawler-cli.js --help
-```
+### Main Options
+
+## Command Line Options
+
+Below is a table of command-line options supported by the program, grouped by their respective categories.
+
+### Main Options
+
+| Name              | Alias | Type     | Description                                                                                     |
+|--------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--help`          | `-h`  | Boolean  | Display this usage guide.                                                                       |
+| `--output_dir`    |       | String   | Directory where screenshot, HTML, and MHTML files will be saved. A new subdirectory will be automatically created with the name or id of the crawl.                              |
+| `--name`          |       | String   | Name of this crawl (optional).                                                                 |
+| `--job_id`        | `-j`  | Number   | ID of the job that is managing this crawl (Optional, required if run via Kubernetes job).       |
+| `--resume_if_able`|       | Boolean  | If included, attempts to resume any previous incomplete crawl with the same name.              |
+| `--log_level`     |       | String   | Sets the level of logging verbosity. Options: `error`, `warning`, `info`, `debug`, `verbose`. Defaults to `info`. |
+
+### Input Options
+
+| Name                  | Alias | Type     | Description                                                                                     |
+|------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--crawl_list`         |       | String   | A text file containing URLs to crawl, one URL per line.                                         |
+| `--ad_url_crawl_list`  |       | String   | A CSV with columns `(url, ad_id)` for URLs to crawl and their associated ad IDs.               |
+| `--url`                |       | String   | A single URL to crawl. Use instead of `--crawl_list` to crawl one URL at a time.               |
+| `--ad_id`              |       | String   | Specify the ad ID for a single URL crawl associated with an ad landing page.                   |
+
+### Database Configuration
+
+| Name            | Alias | Type     | Description                                                                                     |
+|------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--pg_conf_file` |       | String   | JSON file with Postgres connection parameters: `host`, `port`, `database`, `user`, `password`.  |
+| `--pg_host`      |       | String   | Hostname of the Postgres instance (Default: `localhost`).                                       |
+| `--pg_port`      |       | Number   | Port of the Postgres instance (Default: `5432`).                                               |
+| `--pg_database`  |       | String   | Name of the Postgres database (Default: `adscraper`).                                          |
+| `--pg_user`      |       | String   | Name of the Postgres user.                                                                     |
+| `--pg_password`  |       | String   | Password for the Postgres user.                                                                |
+
+### Puppeteer Options
+
+| Name               | Alias | Type     | Description                                                                                     |
+|---------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--headless`        |       | String   | Puppeteer headless mode: `true`, `false`, or `shell` (Default: `true`).                        |
+| `--profile_dir`     |       | String   | Directory of the profile (user data directory) for Puppeteer.                                  |
+| `--executable_path` |       | String   | Path to the Chrome executable for this crawl.                                                  |
+| `--proxy_server`    |       | String   | Proxy server for Chrome traffic.                                                              |
+
+### Crawl Options
+
+| Name                   | Alias | Type     | Description                                                                                     |
+|-------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--shuffle_crawl_list` |       | Boolean  | Randomize the order of URLs in the crawl list.                                                 |
+| `--crawl_article`       |       | Boolean  | Crawl in article mode: crawl the home page and the first article in the site's RSS feed.       |
+| `--crawl_page_with_ads` |       | Number   | Crawl additional pages with ads. Specify the number of additional pages to visit.             |
+| `--refresh_pages`       |       | Boolean  | Refresh each page after scraping and scrape it a second time (Default: `false`).              |
+
+### Scrape Options
+
+| Name                             | Alias | Type     | Description                                                                                     |
+|-----------------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
+| `--scrape_site`                  |       | Boolean  | Scrape the content of the sites in the crawl list.                                             |
+| `--scrape_ads`                   |       | Boolean  | Scrape the content of ads on the sites in the crawl list.                                      |
+| `--capture_third_party_request_urls` |    | Boolean  | Capture URLs of third-party requests made by websites.                                         |
+| `--click_ads`                    |       | String   | Specify ad-click behavior: `noClick`, `clickAndBlockLoad`, or `clickAndScrapeLandingPage`. Default: `noClick`. |
+| `--screenshot_ads_with_context`  |       | Boolean  | Include a 150px margin around ads in screenshots for context (Default: `false`).              |
