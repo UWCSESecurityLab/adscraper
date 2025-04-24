@@ -76,17 +76,49 @@ The crawl cluster needs a shared storage volume that all crawler instances
 can access, so that they can read input files, and write scraped ad data
 to the same location.
 
-  - If you are running on a single node, you can designate a directory on
-    your machine as a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
-    volume.
-  - If you are running on multiple nodes, you will need to set up a network
-    storage volume. Refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes)
-    for setting up volumes and drivers.
-  - Once you have set up your local or network storage volume,
-    to register your volume with adscraper, edit
-    [config/indexed-job.yaml](config/indexed-job.yaml)
-    and add your volume to `.spec.template.spec.volumes`,
-    using the name `adscraper-storage`.
+- If you are running on a single node, you can designate a directory on
+  your machine as a [hostPath](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath)
+  volume.
+- If you are running on multiple nodes, you will need to set up a network
+  storage volume. Refer to the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes)
+  for setting up volumes and drivers.
+- Once you have set up your local or network storage volume,
+  to register your volume with adscraper, edit
+  [config/indexed-job.yaml](config/indexed-job.yaml)
+  and add your volume to `.spec.template.spec.volumes`,
+  using the name `adscraper-storage`.
+
+For example, for a CIFS volume, you would add the following to `.spec.template.spec.volumes`:
+
+```yaml
+      volumes:
+        - name: adscraper-storage
+          flexVolume:
+            driver: "fstab/cifs"
+            fsType: "cifs"
+            secretRef:
+              name: "cifs-secret"
+            options:
+              networkPath: "//example.com/adscraper-storage"
+              mountOptions: "uid=999,gid=999,dir_mode=0777,file_mode=0777"
+```
+
+And then under `.spec.template.spec.containers.volumeMounts`, add the following:
+
+```yaml
+      volumeMounts:
+        - name: adscraper-storage
+          mountPath: /home/pptruser/data
+```
+
+It is recommended to mount the volume to `/home/pptruser/data`, because
+`pptruser` is the user that runs the crawler in the container, and the
+permissions are set up to allow this user to write to the directory.
+
+You can use any volume type that is supported by Kubernetes, including NFS,
+CIFS, or any other network storage solution.
+You can read more about setting up volumes in the [Kubernetes documentation](https://kubernetes.io/docs/concepts/storage/volumes/).
+
 
 ### 3. Set up a Postgres database
 
@@ -174,6 +206,7 @@ job specification file. Below is a summary of the fields in the job specificatio
 
 
 ##### JobSpec
+
 This is the entry point for the job specification file. Here, you can specify
 the job name, output directories, and amount of parallelism. Additionally,
 you can specify one of three types of crawls:
@@ -186,6 +219,19 @@ you can specify one of three types of crawls:
 
 - Ad landing page crawls: provide a CSV file with columns `ad_id` and `url` to `adUrlCrawlList`. Each URL will be crawled with a clean profile, and the collected data
   will be associated with an ad_id from a previous crawl.
+
+
+Notes on directories:
+
+- `hostDataDir` refers to the path of the output directory on the host.
+  Specifically, the Node.js script that starts the crawl job must be able to
+  reference this path. For example, if you mounted a network volume at `/mnt/data`,
+  you would set `hostDataDir` to `/mnt/data`.
+
+- `containerDataDir` refers to the location in the container where the output
+directory is mounted. This is the path that you specify in the volumeMounts
+field when modifying [config/indexed-job.yaml](config/indexed-job.yaml) (see previous instructions in Setup). The recommended directory is `/home/pptruser/data`, because
+`pptruser` is the user that runs the crawler in the container.
 
 | Name                  | Type                | Description                                                                                     |
 |-----------------------|---------------------|-------------------------------------------------------------------------------------------------|
@@ -363,3 +409,30 @@ The storage volume contains the raw HTML and screenshots of the pages and
 ads scraped. Each job will have its own directory, with the pattern `job_<jobId>`.
 The database contains a reference to the path of the screenshot and HTML files
 for each page and ad, which is relative to the root of the storage volume.
+
+## Performance Notes
+
+Crawling with puppeteer can take many resources.
+In our experience, the crawl cluster needs at least 1 CPU core and 4GB of RAM
+per crawler instance. The minimum resources for each node can be specified in [config/indexed-job.yaml](config/indexed-job.yaml).
+
+However, the main bottleneck when crawling is often disk I/O, because
+Chrome constantly caches data to disk. If you plan to run many crawlers
+in parallel, we recommend using SSDs.
+
+Running with profiles further complicates the disk I/O issue. When running a
+cluster, the profiles are by default stored in the shared storage volume.
+This is problematic because if it is a network storage volume, it can be
+slow to read and write to, especially if multiple crawlers are attempting
+to read and write simultaneously. Profiles can be large - up to 5GB after
+crawling many sites.
+
+One mitigation strategy is to locally cache profiles, rather than on the network
+volume. This can be done by adding a second volumeMount to the container in
+[config/indexed-job.yaml](config/indexed-job.yaml), and use a hostPath volume
+that points to a local directory on the worker node. This will allow for
+faster reads and writes. However, you must then restrict profiles to running
+on the worker node on which its profile is stored, if you reuse profiles across
+crawls (i.e. a profile building crawl followed by an ad collection crawl).
+This can be done by setting the `nodeName` field in the job specification
+to the name of the worker node where the profile is stored.

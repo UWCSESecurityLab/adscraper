@@ -1,6 +1,7 @@
 {
   "jobName": "profileCrawls",
-  "dataDir": "/home/pptruser/data",
+  "hostDataDir": "/mnt/data",
+  "containerDataDir": "/home/pptruser/data",
   "maxWorkers": 4,
   "profileOptions": {
     "useExistingProfile": false,
