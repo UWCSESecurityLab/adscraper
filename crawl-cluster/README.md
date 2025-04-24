@@ -35,6 +35,24 @@ a network storage volume to store scraped data.
 If you do not need to run more than a few crawl jobs, consider using the
 base adscraper script.
 
+**Table of Contents**
+- [Adscraper Distributed Crawls](#adscraper-distributed-crawls)
+  - [Pre-requisites](#pre-requisites)
+  - [Setup](#setup)
+    - [1. Installing Kubernetes](#1-installing-kubernetes)
+    - [2. Setting up a network storage volume](#2-setting-up-a-network-storage-volume)
+    - [3. Set up a Postgres database](#3-set-up-a-postgres-database)
+    - [4. Set up the network policy for crawler pods](#4-set-up-the-network-policy-for-crawler-pods)
+  - [Usage](#usage)
+    - [Creating crawler inputs](#creating-crawler-inputs)
+      - [Crawl Lists](#crawl-lists)
+      - [Job Specification File](#job-specification-file)
+      - [Example job specifications](#example-job-specifications)
+    - [Running crawl jobs](#running-crawl-jobs)
+    - [Monitoring crawl jobs](#monitoring-crawl-jobs)
+    - [Viewing crawl results](#viewing-crawl-results)
+  - [Performance Notes](#performance-notes)
+
 ## Pre-requisites
 
 Adscraper distributed crawls require the following software to be installed:
@@ -205,7 +223,7 @@ the crawl lists to use, and configure the behavior of the crawlers.
 job specification file. Below is a summary of the fields in the job specification.
 
 
-##### JobSpec
+**JobSpec**
 
 This is the entry point for the job specification file. Here, you can specify
 the job name, output directories, and amount of parallelism. Additionally,
@@ -249,7 +267,7 @@ field when modifying [config/indexed-job.yaml](config/indexed-job.yaml) (see pre
 
 ---
 
-##### ProfileOptions
+**ProfileOptions**
 
 Configuration options for handling profiles. You can specify whether to use
 profiles, whether to save them after the crawl or not, whether to save
@@ -271,7 +289,7 @@ use a SOCKS proxy server for individual profiles, you can specify it in the
 
 ---
 
-##### CrawlOptions
+**CrawlOptions**
 
 | Name                       | Type      | Description                                                                                     |
 |----------------------------|-----------|-------------------------------------------------------------------------------------------------|
@@ -282,7 +300,7 @@ use a SOCKS proxy server for individual profiles, you can specify it in the
 
 ---
 
-##### ScrapeOptions
+**ScrapeOptions**
 
 Configuration options for scraping behavior. Here, you can specify what
 kinds of data to scrape (i.e. ads, pages, third-party requests).
@@ -297,7 +315,7 @@ kinds of data to scrape (i.e. ads, pages, third-party requests).
 
 ---
 
-##### ProfileCrawlList
+**ProfileCrawlList**
 
 This is the interface for specifying a single profile's crawl list and
 crawling configuration. In the full specification file, you will have an array

@@ -6,6 +6,23 @@ can be used to run individual crawls from the command line (or as a library).
 To run multiple crawls in parallel, or to run crawls on a cluster, see the
 [crawl-cluster documentation](../crawl-cluster/README.md).
 
+**Table of Contents**
+- [Crawler script documentation](#crawler-script-documentation)
+  - [Setup](#setup)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+  - [Crawler Usage](#crawler-usage)
+    - [Create input file(s) and output directories](#create-input-files-and-output-directories)
+    - [Running a basic crawl to scrape ads](#running-a-basic-crawl-to-scrape-ads)
+    - [Collecting ad URLs and landing pages](#collecting-ad-urls-and-landing-pages)
+    - [Using profiles](#using-profiles)
+    - [Advanced example: collecting ads and landing pages in separate profiles](#advanced-example-collecting-ads-and-landing-pages-in-separate-profiles)
+    - [Resuming a failed crawl](#resuming-a-failed-crawl)
+  - [Viewing crawl results](#viewing-crawl-results)
+  - [Customizing the crawler](#customizing-the-crawler)
+  - [Command Line Options](#command-line-options)
+
+
 ## Setup
 
 ### Prerequisites
@@ -308,7 +325,7 @@ CLI interface of the crawler (`src/crawler-cli.js`). These can
 also be passed in as arguments to the `crawl()` function in
 `src/crawler.ts`, if you are using the crawler as a library.
 
-### Main Options
+**Main Options**
 
 | Name              | Alias | Type     | Description                                                                                     |
 |--------------------|-------|----------|-------------------------------------------------------------------------------------------------|
@@ -319,7 +336,7 @@ also be passed in as arguments to the `crawl()` function in
 | `--resume_if_able`|       | Boolean  | If included, attempts to resume any previous incomplete crawl with the same name.              |
 | `--log_level`     |       | String   | Sets the level of logging verbosity. Options: `error`, `warning`, `info`, `debug`, `verbose`. Defaults to `info`. |
 
-### Input Options
+**Input Options**
 
 | Name                  | Alias | Type     | Description                                                                                     |
 |------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
@@ -328,7 +345,7 @@ also be passed in as arguments to the `crawl()` function in
 | `--url`                |       | String   | A single URL to crawl. Use instead of `--crawl_list` to crawl one URL at a time.               |
 | `--ad_id`              |       | String   | Specify the ad ID for a single URL crawl associated with an ad landing page.                   |
 
-### Database Configuration
+**Database Configuration**
 
 | Name            | Alias | Type     | Description                                                                                     |
 |------------------|-------|----------|-------------------------------------------------------------------------------------------------|
@@ -339,7 +356,7 @@ also be passed in as arguments to the `crawl()` function in
 | `--pg_user`      |       | String   | Name of the Postgres user.                                                                     |
 | `--pg_password`  |       | String   | Password for the Postgres user.                                                                |
 
-### Puppeteer Options
+**Puppeteer Options**
 
 | Name               | Alias | Type     | Description                                                                                     |
 |---------------------|-------|----------|-------------------------------------------------------------------------------------------------|
@@ -348,7 +365,7 @@ also be passed in as arguments to the `crawl()` function in
 | `--executable_path` |       | String   | Path to the Chrome executable for this crawl.                                                  |
 | `--proxy_server`    |       | String   | Proxy server for Chrome traffic.                                                              |
 
-### Crawl Options
+**Crawl Options**
 
 | Name                   | Alias | Type     | Description                                                                                     |
 |-------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
@@ -357,7 +374,7 @@ also be passed in as arguments to the `crawl()` function in
 | `--crawl_page_with_ads` |       | Number   | Crawl additional pages with ads. Specify the number of additional pages to visit.             |
 | `--refresh_pages`       |       | Boolean  | Refresh each page after scraping and scrape it a second time (Default: `false`).              |
 
-### Scrape Options
+**Scrape Options**
 
 | Name                             | Alias | Type     | Description                                                                                     |
 |-----------------------------------|-------|----------|-------------------------------------------------------------------------------------------------|
