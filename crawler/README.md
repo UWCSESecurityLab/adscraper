@@ -271,18 +271,31 @@ node gen/crawler-cli.js \
     --click_ads=noClick
 ```
 
+## Customizing the crawler
+
+Depending on your use case, you may want to implement functionality
+that is not currently supported by the crawler. At the moment, Adscraper
+has not been built to be extensible, but you are welcome to fork the project
+and modify the code to suit your needs. Here are a few key files
+in the source code:
+
+- `src/crawler.ts`: This file launches the crawler and contains the main crawl loop logic.
+- `src/ads/ad-scraper.ts`: This file is the entry point for
+functionality related to scraping ads; functions here are invoked on every page.
+- `src/ads/click.ts`: This file contains the logic for clicking on ads, and handles blocking of page loads.
+- `src/pages/page-scraper.ts`: This file is the entry point for
+  functionality related to scraping pages, functions here are invoked on every page.
+- `src/pages/find-page.ts`: This file contains strategies
+  dynamically crawling pages that are not in the crawl list.
+- `src/util/db.ts`: The file contains the API for reading from and writing to the database.
+
+
 ## Command Line Options
 
 These are all of the available command line options for the
 CLI interface of the crawler (`src/crawler-cli.js`). These can
 also be passed in as arguments to the `crawl()` function in
 `src/crawler.ts`, if you are using the crawler as a library.
-
-### Main Options
-
-## Command Line Options
-
-Below is a table of command-line options supported by the program, grouped by their respective categories.
 
 ### Main Options
 
