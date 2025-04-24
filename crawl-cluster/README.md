@@ -309,7 +309,7 @@ kinds of data to scrape (i.e. ads, pages, third-party requests).
 |----------------------------|---------------------|-------------------------------------------------------------------------------------------------|
 | `scrapeSite`               | `boolean`          | Whether to scrape the page content (screenshot, HTML, MHTML).                                   |
 | `scrapeAds`                | `boolean`          | Whether to scrape the ads on the page (screenshot, HTML).                                       |
-| `clickAds`                 | `'noClick' | 'clickAndBlockLoad' | 'clickAndScrapeLandingPage'` | Behavior for clicking ads. |
+| `clickAds`                 | String | Behavior for clicking ads. Must be either `noClick`, `clickAndBlockLoad`, or `clickAndScrapeLandingPage`. See crawler/README.md for details. |
 | `captureThirdPartyRequests`| `boolean`          | Whether to capture third-party network requests for tracking detection.                         |
 | `screenshotAdsWithContext` | `boolean`          | Whether to include a 150px margin around ads in screenshots for context.                        |
 
