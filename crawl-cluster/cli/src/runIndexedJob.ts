@@ -1,4 +1,4 @@
-import k8s from '@kubernetes/client-node';
+import * as k8s from '@kubernetes/client-node';
 import { CrawlerFlags } from 'ads-crawler';
 import amqp from 'amqplib';
 import cliProgress from 'cli-progress';
@@ -117,8 +117,8 @@ async function main() {
 
       // Submit the job to cluster
       console.log('Submitting k8s job');
-      const res = await batchApi.createNamespacedJob('default', job);
-      console.log(res.body);
+      const res = await batchApi.createNamespacedJob({ namespace: 'default', body: job });
+      console.log(res);
     }
 
     console.log('Done!');
