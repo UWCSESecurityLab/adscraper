@@ -12,7 +12,6 @@ import { identifyAdsInDOM } from './ad-detection.js';
 import { extractExternalUrls } from './ad-external-urls.js';
 import { splitChumbox } from './chumbox-handler.js';
 import { clickAd } from './click.js';
-import { matchDOMUpdateToAd } from './dom-monitor.js';
 import { scrapeIFramesInElement } from './iframe-scraper.js';
 
 // Handle to an ad. We store two handles: the screenshot target, which

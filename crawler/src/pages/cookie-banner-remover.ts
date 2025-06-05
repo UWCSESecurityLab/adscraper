@@ -1,6 +1,6 @@
 import { Page } from "puppeteer";
 import * as log from '../util/log.js';
-import cookieSelectors from './easylist_cookie_general_hide.json' assert { type: "json" };
+import cookieSelectors from './easylist_cookie_general_hide.json' with { type: "json" };
 
 export function removeCookieBanners(page: Page) {
   log.info(`${page.url()}: Attempting to remove cookie banners`);

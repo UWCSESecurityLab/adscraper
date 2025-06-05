@@ -1,6 +1,5 @@
 import { ElementHandle, HTTPRequest, Page } from "puppeteer";
 import * as log from '../util/log.js';
-import { injectDOMListener } from "./dom-monitor.js";
 import { PageType, scrapePage } from "../pages/page-scraper.js";
 import DbClient from "../util/db.js";
 import { sleep } from "../util/timeout.js";
@@ -262,7 +261,6 @@ export function clickAd(
           // If the ad click opened a new tab/popup, start crawling in the new tab.
           ctPage = newPage;
           log.debug(`${newPage.url()}: Loading and scraping popup page`);
-          // injectDOMListener(newPage);
           newPage.on('load', async () => {
             let db = DbClient.getInstance();
             let ctPageId;

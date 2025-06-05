@@ -1,5 +1,5 @@
 import { ElementHandle, JSHandle, Page } from 'puppeteer';
-import adSelectors from './easylist_ad_selectors.json' assert { type: "json" };
+import adSelectors from './easylist_ad_selectors.json' with { type: "json" };
 
 /**
  * Detects ads in the page using EasyList's CSS selectors, and returns an
